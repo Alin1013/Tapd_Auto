@@ -1,0 +1,5 @@
+.env
+.superpowers/
+node_modules/
+public/reports/
+*.log
