@@ -12,7 +12,7 @@
 4. 对每个 `workspace_id` 拉字段信息，确认任务、缺陷、需求的状态和自定义字段。
 5. 对每个项目迭代拉取 `/iterations`、`/tasks`、`/bugs`、`/stories`。
 6. 本地聚合任务进度、缺陷统计和需求排期。
-7. 生成 HTML、Markdown、JSON；后续再补 PNG。
+7. 生成 PNG、HTML、Markdown、JSON；live 模式额外保存字段发现结果。
 8. 通过统一通知适配器发送日报，首版使用钉钉 Webhook，长期保留应用机器人适配空间。
 
 ## 2. TAPD 通用规则
@@ -25,6 +25,7 @@
 - 当某页返回数量少于 200 时停止翻页。
 - 时间统计按 `Asia/Shanghai` 日期口径。
 - 配置、日志、报表都不得写入 TAPD token。
+- CLI 必须显式选择 `--dry-run` 或 `--live`，避免默认误请求 TAPD。
 
 ## 3. TAPD 字段发现规则
 
@@ -134,6 +135,7 @@ send_url = webhook + "&timestamp=" + timestamp + "&sign=" + sign
 
 - `DINGTALK_WEBHOOK` 和 `DINGTALK_SECRET` 只放 `.env`。
 - Markdown 中的图片 URL 和 HTML 报表 URL 必须能被钉钉客户端访问。
+- Markdown 默认嵌入 `summary-1.png`，链接到 `index.html` 交互报表。
 - 自定义机器人限流要按每分钟 20 条消息控制，图片分页时应合并发送。
 - 发送层必须保留统一入口，后续可以替换为应用机器人。
 

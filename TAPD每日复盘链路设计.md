@@ -25,13 +25,14 @@
 
 第一版不依赖 TAPD 页面自动化，不保存用户 TAPD 登录态，不在 HTML 报表中保存 TAPD token。系统只使用服务端环境里的访问令牌拉取日报所需数据。
 
-当前脚手架先支持 dry-run：使用 `config.example.yaml` 中的 `sample_data` 生成 HTML、Markdown 和 JSON，确保配置、聚合和展示链路可验证。真实 TAPD 接口字段确认后，再用 API 返回数据替换 `sample_data`。
+当前脚手架支持 dry-run 和 live 两种模式：dry-run 使用 `config.example.yaml` 中的 `sample_data` 生成 PNG、HTML、Markdown 和 JSON，live 使用 TAPD OpenAPI 拉取真实数据并额外保存字段发现结果。钉钉发送必须显式传入 `--send-dingtalk`，避免调试时误发群消息。
 
 接口接入规则：
 
 - TAPD 鉴权优先使用 `Authorization: Bearer ${TAPD_ACCESS_TOKEN}`。
 - TAPD 列表接口统一按 `limit=200&page=N` 翻页。
 - TAPD 响应 `status = 1` 才算成功，失败时使用 `info` 输出错误原因。
+- CLI 必须显式选择 `--dry-run` 或 `--live`。
 - 任务归属字段默认 `owner`。
 - 缺陷归属字段默认 `current_owner`，用于展示当前处理压力。
 - 产品经理需求字段默认 `owner`。

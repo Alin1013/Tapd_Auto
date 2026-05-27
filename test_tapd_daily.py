@@ -33,6 +33,9 @@ report:
 dingtalk:
   webhook: ${DINGTALK_WEBHOOK}
   secret: ${DINGTALK_SECRET}
+  at_mobiles:
+    - "13800138000"
+  is_at_all: false
 
 projects:
   - name: 示例项目
@@ -224,7 +227,10 @@ class TapdDailyTests(unittest.TestCase):
             self.assertEqual(output_dir.name, "2026-05-26")
             self.assertTrue((output_dir / "index.html").exists())
             self.assertTrue((output_dir / "summary.md").exists())
+            self.assertTrue((output_dir / "summary-1.png").exists())
             self.assertTrue((output_dir / "report.json").exists())
+            self.assertTrue((output_dir / "summary-1.png").read_bytes().startswith(b"\x89PNG"))
+            self.assertIn("![日报图]", (output_dir / "summary.md").read_text(encoding="utf-8"))
 
     def test_tapd_client_validates_api_status_and_reads_paginated_lists(self):
         first_page_items = [{"id": item_id} for item_id in range(200)]
@@ -272,6 +278,69 @@ class TapdDailyTests(unittest.TestCase):
 
         self.assertIn("timestamp=1760000000000", signed_url)
         self.assertIn("sign=", signed_url)
+        self.assertEqual(payload["msgtype"], "markdown")
+        self.assertEqual(payload["markdown"]["title"], "TAPD 每日复盘 2026-05-26")
+        self.assertEqual(payload["at"]["atMobiles"], ["13800138000"])
+
+    def test_create_tapd_client_requires_access_token_for_live_mode(self):
+        config = td.load_config_from_text(CONFIG_TEXT, env={})
+
+        with self.assertRaisesRegex(RuntimeError, "TAPD_ACCESS_TOKEN"):
+            td.create_tapd_client(config, env={"TAPD_ACCESS_TOKEN": ""})
+
+    def test_collect_live_data_fetches_fields_iterations_and_lists(self):
+        class FakeTapdClient:
+            def __init__(self):
+                self.json_calls = []
+                self.paginated_calls = []
+
+            def get_json(self, path, params=None):
+                self.json_calls.append((path, params or {}))
+                return {"status": 1, "data": {"path": path, "workspace_id": (params or {}).get("workspace_id")}}
+
+            def get_paginated(self, path, params=None):
+                self.paginated_calls.append((path, params or {}))
+                if path == "tasks":
+                    return [{"workspace_id": "33002756", "iteration_id": "sprint-1", "owner": "zhangsan", "status": "done"}]
+                if path == "bugs":
+                    return [{"workspace_id": "33002756", "iteration_id": "sprint-1", "current_owner": "zhangsan", "status": "已关闭"}]
+                if path == "stories":
+                    return [{"workspace_id": "33002756", "iteration_id": "sprint-1", "owner": "product_a", "name": "真实需求"}]
+                return []
+
+        config = td.load_config_from_text(CONFIG_TEXT, env={})
+        raw_data, field_info = td.collect_live_data(config, FakeTapdClient())
+
+        self.assertEqual(len(raw_data["tasks"]), 1)
+        self.assertEqual(len(raw_data["bugs"]), 1)
+        self.assertEqual(len(raw_data["stories"]), 1)
+        self.assertIn("33002756", field_info["workspaces"])
+        self.assertEqual(field_info["workspaces"]["33002756"]["tasks"]["path"], "tasks/get_fields_info")
+        self.assertEqual(field_info["workspaces"]["33002756"]["bugs"]["path"], "bugs/get_fields_info")
+        self.assertEqual(field_info["workspaces"]["33002756"]["stories"]["path"], "stories/get_fields_info")
+        self.assertEqual(field_info["workspaces"]["33002756"]["iterations"][0]["path"], "iterations")
+
+    def test_send_dingtalk_report_posts_signed_markdown_payload(self):
+        config = td.load_config_from_text(
+            CONFIG_TEXT,
+            env={
+                "DINGTALK_WEBHOOK": "https://oapi.dingtalk.com/robot/send?access_token=abc",
+                "DINGTALK_SECRET": "SECsecret",
+            },
+        )
+        report = td.build_report(config, RAW_DATA, report_date="2026-05-26")
+        response = Mock()
+        response.json.return_value = {"errcode": 0, "errmsg": "ok"}
+        response.raise_for_status.return_value = None
+
+        with patch("tapd_daily.time.time", return_value=1760000000), patch("tapd_daily.requests.post", return_value=response) as request_post:
+            td.send_dingtalk_report(config, report, "https://tapd-daily.internal.example.com/reports/2026-05-26/index.html")
+
+        request_post.assert_called_once()
+        post_url = request_post.call_args.args[0]
+        payload = request_post.call_args.kwargs["json"]
+        self.assertIn("timestamp=1760000000000", post_url)
+        self.assertIn("sign=", post_url)
         self.assertEqual(payload["msgtype"], "markdown")
         self.assertEqual(payload["markdown"]["title"], "TAPD 每日复盘 2026-05-26")
         self.assertEqual(payload["at"]["atMobiles"], ["13800138000"])

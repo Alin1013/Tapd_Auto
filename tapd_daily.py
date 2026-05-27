@@ -25,6 +25,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 import yaml
+from PIL import Image, ImageDraw, ImageFont
 
 
 DEFAULT_DONE_TASK_STATUSES = {"已完成", "已关闭", "完成", "关闭", "Done", "Closed"}
@@ -95,6 +96,14 @@ def extract_tapd_data(payload: Any) -> list[dict[str, Any]]:
     return []
 
 
+def unwrap_tapd_data(payload: Any) -> Any:
+    """取出 TAPD 响应里的 `data`，保留字段发现这类字典结构。"""
+
+    if isinstance(payload, dict) and "data" in payload:
+        return payload["data"]
+    return payload
+
+
 def load_dotenv(path: Path = Path(".env")) -> dict[str, str]:
     """读取本地 `.env`，只返回键值，不打印敏感信息。"""
 
@@ -125,6 +134,23 @@ def load_config_from_text(text: str, env: dict[str, str] | None = None) -> dict[
     config = resolve_env(config, merged_env)
     validate_config(config)
     return config
+
+
+def create_tapd_client(config: dict[str, Any], env: dict[str, str] | None = None) -> TapdClient:
+    merged_env = {**load_dotenv(), **os.environ}
+    if env is not None:
+        merged_env.update(env)
+
+    access_token = merged_env.get("TAPD_ACCESS_TOKEN", "").strip()
+    if not access_token:
+        raise RuntimeError("缺少 TAPD_ACCESS_TOKEN，无法进入 live 同步模式。")
+
+    tapd = config.get("tapd", {})
+    return TapdClient(
+        base_url=tapd.get("base_url", "https://api.tapd.cn"),
+        access_token=access_token,
+        auth_mode=tapd.get("auth_mode", "bearer"),
+    )
 
 
 def resolve_env(value: Any, env: dict[str, str]) -> Any:
@@ -258,6 +284,138 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
     }
 
 
+def collect_live_data(config: dict[str, Any], client: TapdClient) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
+    """按配置从 TAPD 拉取真实数据。
+
+    字段发现结果单独返回，后续写入报表目录，方便确认状态枚举和自定义字段。
+    """
+
+    raw_data: dict[str, list[dict[str, Any]]] = {"tasks": [], "bugs": [], "stories": []}
+    field_info: dict[str, Any] = {
+        "generated_at": datetime.now(ZoneInfo(config["timezone"])).isoformat(),
+        "workspaces": {},
+    }
+    rules = get_tapd_rules(config)
+    fields = rules["fields"]
+
+    for project in config["projects"]:
+        workspace_id = str(project["workspace_id"])
+        workspace_info = field_info["workspaces"].setdefault(
+            workspace_id,
+            {
+                "tasks": None,
+                "bugs": None,
+                "stories": None,
+                "iterations": [],
+            },
+        )
+
+        if workspace_info["tasks"] is None:
+            workspace_info["tasks"] = unwrap_tapd_data(client.get_json("tasks/get_fields_info", {"workspace_id": workspace_id}))
+            workspace_info["bugs"] = unwrap_tapd_data(
+                client.get_json("bugs/get_fields_info", {"workspace_id": workspace_id, "all_options": 1})
+            )
+            workspace_info["stories"] = unwrap_tapd_data(client.get_json("stories/get_fields_info", {"workspace_id": workspace_id}))
+
+        for iteration in project["iterations"]:
+            iteration_id = str(iteration["iteration_id"])
+            iteration_payload = client.get_json(
+                "iterations",
+                {
+                    "workspace_id": workspace_id,
+                    "id": iteration_id,
+                    "fields": "id,name,workspace_id,startdate,enddate,status,created,modified,completed",
+                },
+            )
+            workspace_info["iterations"].append(unwrap_tapd_data(iteration_payload))
+
+            common_params = {"workspace_id": workspace_id, "iteration_id": iteration_id}
+            raw_data["tasks"].extend(
+                client.get_paginated(
+                    "tasks",
+                    {
+                        **common_params,
+                        "fields": join_fields(
+                            [
+                                "id",
+                                "name",
+                                "status",
+                                fields["task_owner"],
+                                "created",
+                                "completed",
+                                "iteration_id",
+                                "story_id",
+                                "begin",
+                                "due",
+                                "priority_label",
+                            ]
+                        ),
+                    },
+                )
+            )
+            raw_data["bugs"].extend(
+                client.get_paginated(
+                    "bugs",
+                    {
+                        **common_params,
+                        "fields": join_fields(
+                            [
+                                "id",
+                                "title",
+                                "status",
+                                "v_status",
+                                fields["bug_owner"],
+                                "reporter",
+                                "created",
+                                "resolved",
+                                "closed",
+                                "iteration_id",
+                                "priority_label",
+                                "severity",
+                            ]
+                        ),
+                    },
+                )
+            )
+            raw_data["stories"].extend(
+                client.get_paginated(
+                    "stories",
+                    {
+                        **common_params,
+                        "fields": join_fields(
+                            [
+                                "id",
+                                "name",
+                                "status",
+                                "v_status",
+                                fields["story_pm"],
+                                "creator",
+                                "developer",
+                                "begin",
+                                "due",
+                                "created",
+                                "completed",
+                                "iteration_id",
+                                "priority_label",
+                            ]
+                        ),
+                    },
+                )
+            )
+
+    return raw_data, field_info
+
+
+def join_fields(fields: list[str]) -> str:
+    """去重后拼接 TAPD fields 参数，保持字段顺序稳定。"""
+
+    result: list[str] = []
+    for field in fields:
+        if field and field not in result:
+            result.append(field)
+    return ",".join(result)
+
+
 def build_requirements(
     stories: list[dict[str, Any]],
     project: dict[str, Any],
@@ -350,20 +508,28 @@ def percent(done: int, total: int) -> int:
     return round(done / total * 100)
 
 
-def render_markdown(report: dict[str, Any], report_url: str) -> str:
+def render_markdown(report: dict[str, Any], report_url: str, image_urls: list[str] | None = None) -> str:
     summary = report["summary"]
-    return "\n".join(
-        [
-            f"### TAPD 每日复盘 {report['date']}",
-            "",
-            f"今日统计：{summary['project_count']} 个项目 / {summary['iteration_count']} 个迭代 / {summary['member_count']} 人",
-            f"任务整体完成率：{summary['task_completion_rate']}%",
-            f"缺陷：未解决 {summary['bugs_open']}，今日新增 {summary['bugs_new']}，今日关闭 {summary['bugs_closed']}",
-            "",
-            f"[查看交互报表]({report_url})",
-            "",
-        ]
-    )
+    lines = [
+        f"### TAPD 每日复盘 {report['date']}",
+        "",
+        f"今日统计：{summary['project_count']} 个项目 / {summary['iteration_count']} 个迭代 / {summary['member_count']} 人",
+        f"任务整体完成率：{summary['task_completion_rate']}%",
+        f"缺陷：未解决 {summary['bugs_open']}，今日新增 {summary['bugs_new']}，今日关闭 {summary['bugs_closed']}",
+        "",
+    ]
+    for image_url in image_urls or []:
+        lines.extend([f"![日报图]({image_url})", ""])
+    lines.extend([f"[查看交互报表]({report_url})", ""])
+    return "\n".join(lines)
+
+
+def public_report_url(config: dict[str, Any], report: dict[str, Any]) -> str:
+    return public_report_asset_url(config["report"]["public_base_url"], report["date"], "index.html")
+
+
+def public_report_asset_url(public_base_url: str, report_date: str, filename: str) -> str:
+    return f"{public_base_url.rstrip('/')}/reports/{report_date}/{filename}"
 
 
 def build_dingtalk_signed_url(webhook: str, secret: str, timestamp: int | None = None) -> str:
@@ -396,6 +562,39 @@ def build_dingtalk_markdown_payload(
             "isAtAll": is_at_all,
         },
     }
+
+
+def send_dingtalk_report(config: dict[str, Any], report: dict[str, Any], report_url: str) -> None:
+    """发送钉钉 Markdown 日报。
+
+    该函数只在 CLI 显式传入 `--send-dingtalk` 时调用，避免 dry-run 或调试时误发群消息。
+    """
+
+    dingtalk = config.get("dingtalk", {})
+    webhook = dingtalk.get("webhook", "").strip()
+    if not webhook:
+        raise RuntimeError("缺少 DINGTALK_WEBHOOK，无法发送钉钉日报。")
+
+    title = f"TAPD 每日复盘 {report['date']}"
+    image_url = f"{report_url.rsplit('/', 1)[0]}/summary-1.png"
+    markdown = render_markdown(report, report_url, image_urls=[image_url])
+    payload = build_dingtalk_markdown_payload(
+        title=title,
+        markdown=markdown,
+        at_mobiles=dingtalk.get("at_mobiles", []),
+        is_at_all=bool(dingtalk.get("is_at_all", False)),
+    )
+    send_url = build_dingtalk_signed_url(webhook, dingtalk.get("secret", ""))
+    response = requests.post(
+        send_url,
+        json=payload,
+        headers={"Content-Type": "application/json;charset=utf-8"},
+        timeout=30,
+    )
+    response.raise_for_status()
+    result = response.json()
+    if isinstance(result, dict) and result.get("errcode") not in (None, 0):
+        raise RuntimeError(f"钉钉发送失败：{result.get('errmsg', '未知错误')}")
 
 
 def render_html(report: dict[str, Any]) -> str:
@@ -513,11 +712,187 @@ def write_report(report: dict[str, Any], output_root: Path | str, public_base_ur
     output_dir = Path(output_root) / report["date"]
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    report_url = f"{public_base_url.rstrip('/')}/reports/{report['date']}/index.html"
+    report_url = public_report_asset_url(public_base_url, report["date"], "index.html")
+    image_url = public_report_asset_url(public_base_url, report["date"], "summary-1.png")
     (output_dir / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-    (output_dir / "summary.md").write_text(render_markdown(report, report_url), encoding="utf-8")
+    write_summary_png(report, output_dir)
+    (output_dir / "summary.md").write_text(render_markdown(report, report_url, image_urls=[image_url]), encoding="utf-8")
     (output_dir / "index.html").write_text(render_html(report), encoding="utf-8")
     return output_dir
+
+
+def write_summary_png(report: dict[str, Any], output_dir: Path) -> Path:
+    width = 1200
+    margin = 48
+    y = 36
+    estimated_height = estimate_png_height(report)
+    image = Image.new("RGB", (width, estimated_height), "#f6f8fb")
+    draw = ImageDraw.Draw(image)
+
+    title_font = load_font(38, bold=True)
+    h2_font = load_font(26, bold=True)
+    h3_font = load_font(20, bold=True)
+    body_font = load_font(17)
+    small_font = load_font(14)
+
+    draw.text((margin, y), f"TAPD 每日复盘 {report['date']}", fill="#172033", font=title_font)
+    y += 64
+    y = draw_png_summary_metrics(draw, report["summary"], margin, y, width - margin * 2, body_font, h2_font)
+    y += 24
+
+    for project in report["projects"]:
+        section_top = y
+        section_height = estimate_project_height(project)
+        draw.rounded_rectangle((margin, section_top, width - margin, section_top + section_height), radius=12, fill="#ffffff", outline="#dfe5ee")
+        y += 22
+        draw.text((margin + 24, y), project["name"], fill="#172033", font=h2_font)
+        y += 42
+        for iteration in project["iterations"]:
+            draw.text((margin + 24, y), iteration["name"], fill="#334155", font=h3_font)
+            y += 36
+            y = draw_png_members(draw, iteration["members"], margin + 24, y, width - margin * 2 - 48, body_font, small_font)
+            y += 14
+            y = draw_png_requirements(draw, iteration["requirements"], margin + 24, y, width - margin * 2 - 48, body_font, small_font)
+            y += 18
+        y = section_top + section_height + 22
+
+    cropped = image.crop((0, 0, width, min(y + 20, estimated_height)))
+    output_path = output_dir / "summary-1.png"
+    cropped.save(output_path)
+    return output_path
+
+
+def estimate_png_height(report: dict[str, Any]) -> int:
+    height = 190
+    for project in report["projects"]:
+        height += estimate_project_height(project) + 22
+    return max(height + 40, 520)
+
+
+def estimate_project_height(project: dict[str, Any]) -> int:
+    height = 78
+    for iteration in project["iterations"]:
+        member_rows = max(1, (len(iteration["members"]) + 5) // 6)
+        requirement_rows = max(1, len(iteration["requirements"]))
+        height += 42 + member_rows * 210 + 34 + requirement_rows * 30 + 34
+    return height
+
+
+def draw_png_summary_metrics(
+    draw: ImageDraw.ImageDraw,
+    summary: dict[str, Any],
+    x: int,
+    y: int,
+    width: int,
+    body_font: ImageFont.ImageFont,
+    value_font: ImageFont.ImageFont,
+) -> int:
+    metrics = [
+        ("项目", summary["project_count"]),
+        ("迭代", summary["iteration_count"]),
+        ("人员", summary["member_count"]),
+        ("任务完成率", f"{summary['task_completion_rate']}%"),
+        ("未解决缺陷", summary["bugs_open"]),
+    ]
+    gap = 12
+    card_width = (width - gap * (len(metrics) - 1)) // len(metrics)
+    for index, (label, value) in enumerate(metrics):
+        left = x + index * (card_width + gap)
+        draw.rounded_rectangle((left, y, left + card_width, y + 78), radius=10, fill="#ffffff", outline="#dfe5ee")
+        draw.text((left + 16, y + 12), str(label), fill="#64748b", font=body_font)
+        draw.text((left + 16, y + 38), str(value), fill="#172033", font=value_font)
+    return y + 78
+
+
+def draw_png_members(
+    draw: ImageDraw.ImageDraw,
+    members: list[dict[str, Any]],
+    x: int,
+    y: int,
+    width: int,
+    body_font: ImageFont.ImageFont,
+    small_font: ImageFont.ImageFont,
+) -> int:
+    columns = min(6, max(1, len(members)))
+    cell_width = width // columns
+    row_height = 210
+    for index, member in enumerate(members):
+        row = index // columns
+        col = index % columns
+        left = x + col * cell_width
+        top = y + row * row_height
+        rate = int(member["task_completion_rate"])
+        bar_height = max(4, int(rate / 100 * 105))
+        bar_left = left + cell_width // 2 - 20
+        bar_bottom = top + 122
+        color = "#d94841" if member["bugs_open"] > 0 else "#2f80ed"
+        draw.rectangle((bar_left, top + 16, bar_left + 40, bar_bottom), fill="#e6edf7")
+        draw.rounded_rectangle((bar_left, bar_bottom - bar_height, bar_left + 40, bar_bottom), radius=5, fill=color)
+        draw.text((left + 10, top + 134), member["name"], fill="#172033", font=body_font)
+        draw.text((left + 10, top + 160), f"任务 {member['task_done']}/{member['task_total']} · {rate}%", fill="#475569", font=small_font)
+        draw.text(
+            (left + 10, top + 182),
+            f"缺陷 已关 {member['bugs_closed']} / 未解 {member['bugs_open']} / 新增 {member['bugs_new']}",
+            fill="#475569",
+            font=small_font,
+        )
+    rows = max(1, (len(members) + columns - 1) // columns)
+    return y + rows * row_height
+
+
+def draw_png_requirements(
+    draw: ImageDraw.ImageDraw,
+    requirements: list[dict[str, Any]],
+    x: int,
+    y: int,
+    width: int,
+    body_font: ImageFont.ImageFont,
+    small_font: ImageFont.ImageFont,
+) -> int:
+    draw.text((x, y), "产品需求排期", fill="#172033", font=body_font)
+    y += 30
+    if not requirements:
+        draw.text((x, y), "暂无产品需求排期。", fill="#64748b", font=small_font)
+        return y + 28
+
+    for requirement in requirements[:8]:
+        title = truncate_text(requirement["title"], 32)
+        line = f"{title}｜{requirement['product_manager']}｜{requirement['status']}｜{requirement['start']} - {requirement['end']}"
+        draw.text((x, y), line, fill="#475569", font=small_font)
+        y += 30
+    if len(requirements) > 8:
+        draw.text((x, y), f"还有 {len(requirements) - 8} 条需求，请查看 HTML 报表。", fill="#64748b", font=small_font)
+        y += 30
+    return y
+
+
+def truncate_text(text: str, max_chars: int) -> str:
+    text = str(text)
+    if len(text) <= max_chars:
+        return text
+    return f"{text[: max_chars - 1]}..."
+
+
+def load_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
+    candidates = [
+        "/System/Library/Fonts/PingFang.ttc",
+        "/System/Library/Fonts/STHeiti Light.ttc",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/Library/Fonts/Arial Unicode.ttf",
+    ]
+    for path in candidates:
+        if Path(path).exists():
+            try:
+                return ImageFont.truetype(path, size=size, index=1 if bold else 0)
+            except OSError:
+                continue
+    return ImageFont.load_default()
+
+
+def write_field_info(field_info: dict[str, Any], output_dir: Path) -> Path:
+    path = output_dir / "field-info.json"
+    path.write_text(json.dumps(field_info, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
 
 
 def load_sample_data(config: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -540,17 +915,33 @@ def run_cli(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", default="config.example.yaml", help="配置文件路径")
     parser.add_argument("--date", default=None, help="报表日期，格式 YYYY-MM-DD")
     parser.add_argument("--dry-run", action="store_true", help="使用配置里的 sample_data 生成本地报表")
+    parser.add_argument("--live", action="store_true", help="使用 TAPD OpenAPI 拉取真实数据")
+    parser.add_argument("--send-dingtalk", action="store_true", help="生成报表后发送钉钉 Markdown 消息")
+    parser.add_argument("--skip-field-info", action="store_true", help="live 模式下不写入字段发现结果")
     args = parser.parse_args(argv)
 
     config = load_config(args.config)
     report_date = args.date or today_in_timezone(config["timezone"])
 
-    if not args.dry_run:
-        raise SystemExit("当前版本请先使用 --dry-run；真实 TAPD 接口字段确认后再开启 live 同步。")
+    if args.dry_run and args.live:
+        raise SystemExit("请只选择 --dry-run 或 --live 其中一种模式。")
+    if not args.dry_run and not args.live:
+        raise SystemExit("请显式选择 --dry-run 或 --live，避免误请求 TAPD。")
 
-    raw_data = load_sample_data(config)
+    field_info: dict[str, Any] | None = None
+    if args.live:
+        client = create_tapd_client(config)
+        raw_data, field_info = collect_live_data(config, client)
+    else:
+        raw_data = load_sample_data(config)
     report = build_report(config, raw_data, report_date=report_date)
     output_dir = write_report(report, config["report"]["output_dir"], config["report"]["public_base_url"])
+    if field_info is not None and not args.skip_field_info:
+        field_info_path = write_field_info(field_info, output_dir)
+        print(f"TAPD 字段发现结果：{field_info_path}")
+    if args.send_dingtalk:
+        send_dingtalk_report(config, report, public_report_url(config, report))
+        print("已发送钉钉 Markdown 日报。")
     print(f"已生成 TAPD 每日复盘：{output_dir / 'index.html'}")
     print(f"钉钉 Markdown 摘要：{output_dir / 'summary.md'}")
     return 0

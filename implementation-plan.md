@@ -63,3 +63,13 @@
 - [x] 更新 `config.example.yaml`，将缺陷归属字段默认设为 `current_owner`，需求产品经理字段默认设为 `owner`。
 - [x] 更新 `tapd_daily.py`，支持配置化字段映射、TAPD 响应状态校验、分页读取、钉钉加签和 Markdown payload。
 - [x] 更新 `README.md` 和设计文档，说明接口规则和后续待确认项。
+
+## 任务 7：补全真实同步和通知边界
+
+- [x] 新增 live 模式测试，覆盖字段发现、迭代校验、任务/缺陷/需求列表拉取。
+- [x] 新增 token 校验测试，live 模式缺少 `TAPD_ACCESS_TOKEN` 时明确失败。
+- [x] 新增钉钉发送测试，覆盖加签 URL、Markdown payload 和 `@` 配置。
+- [x] 实现 `--live`，从 TAPD OpenAPI 拉取真实数据。
+- [x] 实现 `--send-dingtalk`，仅在显式传入时发送钉钉消息。
+- [x] 实现 `summary-1.png` 日报图输出，并在 Markdown 中嵌入图片 URL。
+- [x] live 模式写入 `field-info.json`，用于核对工作区字段和状态枚举。

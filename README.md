@@ -1,6 +1,6 @@
 # TAPD 自动日报
 
-这个项目用于生成 TAPD 每日复盘报表。第一版先把本地链路打通：读取配置、聚合任务/缺陷/需求数据、生成 HTML 交互报表、Markdown 摘要和 JSON 数据文件。后续补齐项目、迭代、成员、钉钉机器人和 TAPD 实际字段后，再切到真实接口同步。
+这个项目用于生成 TAPD 每日复盘报表。第一版已经打通本地链路和真实接口边界：读取配置、拉取 TAPD 数据、聚合任务/缺陷/需求、生成 PNG 日报图、HTML 交互报表、Markdown 摘要和 JSON 数据文件。钉钉发送需要显式打开，避免调试时误发群消息。
 
 ## 当前文件
 
@@ -44,6 +44,7 @@ python3 tapd_daily.py --config config.example.yaml --date 2026-05-26 --dry-run
 
 ```text
 public/reports/2026-05-26/index.html
+public/reports/2026-05-26/summary-1.png
 public/reports/2026-05-26/summary.md
 public/reports/2026-05-26/report.json
 ```
@@ -53,6 +54,34 @@ public/reports/2026-05-26/report.json
 ```bash
 python3 -m unittest test_tapd_daily.py -v
 ```
+
+## 真实同步
+
+真实运行前，先复制示例配置并补齐项目、迭代、成员和产品经理：
+
+```bash
+cp config.example.yaml config.yaml
+```
+
+只生成报表，不发送钉钉：
+
+```bash
+python3 tapd_daily.py --config config.yaml --live
+```
+
+生成报表并发送钉钉：
+
+```bash
+python3 tapd_daily.py --config config.yaml --live --send-dingtalk
+```
+
+live 模式会额外生成：
+
+```text
+public/reports/YYYY-MM-DD/field-info.json
+```
+
+这个文件用于核对 TAPD 工作区的状态枚举和自定义字段，方便后续调整 `task_done_statuses`、`bug_closed_statuses` 和字段映射。
 
 ## 后续需要补充的信息
 
@@ -76,11 +105,11 @@ python3 -m unittest test_tapd_daily.py -v
 
 ## 当前链路
 
-1. 从 `.env` 读取 token 和钉钉敏感配置。
-2. 从 `config.example.yaml` 读取项目、迭代、成员、状态映射和示例数据。
-3. 按项目和迭代过滤任务、缺陷、需求。
-4. 按人员计算任务完成率、已关闭缺陷、未解决缺陷、当天新增缺陷。
-5. 按产品经理展示需求排期。
-6. 输出 HTML、Markdown 和 JSON。
-
-真实 TAPD 接口接入后，`sample_data` 会被 API 返回数据替换，后面的聚合和展示链路保持不变。
+1. 从 `.env` 读取 TAPD token 和钉钉敏感配置。
+2. 从配置文件读取项目、迭代、成员、字段映射和状态映射。
+3. dry-run 模式使用 `sample_data`；live 模式调用 TAPD OpenAPI。
+4. live 模式先拉字段发现信息，再拉迭代、任务、缺陷、需求列表。
+5. 按人员计算任务完成率、已关闭缺陷、未解决缺陷、当天新增缺陷。
+6. 按产品经理展示需求排期。
+7. 输出 PNG、HTML、Markdown 和 JSON。
+8. 只有传入 `--send-dingtalk` 时才发送钉钉 Markdown。
