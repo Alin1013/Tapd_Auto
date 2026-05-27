@@ -82,14 +82,10 @@ def render_html(report: dict[str, Any]) -> str:
     .metric strong {{ display: block; font-size: 25px; line-height: 1; margin-top: 10px; color: #111827; }}
     section {{ padding: 18px; margin-top: 16px; }}
     .project-head, .iteration-head, .panel-head {{ display: flex; justify-content: space-between; gap: 14px; align-items: center; }}
-    .iteration {{ margin-top: 18px; padding-top: 16px; border-top: 1px solid #e6ebf1; }}
-    .tabs {{ margin-top: 14px; }}
-    .tab-list {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }}
-    .tab-button {{ border: 1px solid #ccd6e0; background: #fff; color: #334155; border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }}
-    .tab-button.is-active {{ color: #0f4f8f; background: #eef5ff; border-color: #b9d7ff; }}
-    .tab-panel {{ display: none; }}
-    .tab-panel.is-active {{ display: block; }}
-    .tab-metrics {{ display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 10px; margin: 10px 0 12px; }}
+    .iteration-list {{ display: grid; gap: 14px; margin-top: 14px; }}
+    .iteration-card {{ border: 1px solid #d9e1ea; border-radius: 8px; padding: 14px; background: #fff; }}
+    .iteration-grid {{ display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr); gap: 14px; margin-top: 12px; align-items: start; }}
+    .defect-metrics {{ display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 10px; margin: 10px 0 12px; }}
     .mini-metric {{ background: #f8fafc; border: 1px solid #e0e7ef; border-radius: 8px; padding: 10px 12px; }}
     .mini-metric span {{ display: block; color: #667085; font-size: 12px; }}
     .mini-metric strong {{ display: block; color: #111827; font-size: 20px; margin-top: 4px; }}
@@ -109,8 +105,8 @@ def render_html(report: dict[str, Any]) -> str:
     .empty {{ margin: 12px 0 0; padding: 14px; border: 1px dashed #ccd6e0; border-radius: 8px; color: #667085; background: #fbfcfd; }}
     a {{ color: #1769c2; text-decoration: none; }}
     a:hover {{ text-decoration: underline; }}
-    @media (max-width: 920px) {{ .summary {{ grid-template-columns: repeat(3, 1fr); }} .tab-metrics {{ grid-template-columns: repeat(2, 1fr); }} header {{ align-items: flex-start; flex-direction: column; }} }}
-    @media (max-width: 560px) {{ main {{ padding: 20px 12px; }} .summary {{ grid-template-columns: repeat(2, 1fr); }} .tab-metrics {{ grid-template-columns: 1fr; }} .project-head, .iteration-head, .panel-head {{ align-items: flex-start; flex-direction: column; }} th, td {{ padding: 9px 8px; }} }}
+    @media (max-width: 920px) {{ .summary {{ grid-template-columns: repeat(3, 1fr); }} .iteration-grid {{ grid-template-columns: 1fr; }} .defect-metrics {{ grid-template-columns: repeat(2, 1fr); }} header {{ align-items: flex-start; flex-direction: column; }} }}
+    @media (max-width: 560px) {{ main {{ padding: 20px 12px; }} .summary {{ grid-template-columns: repeat(2, 1fr); }} .defect-metrics {{ grid-template-columns: 1fr; }} .project-head, .iteration-head, .panel-head {{ align-items: flex-start; flex-direction: column; }} th, td {{ padding: 9px 8px; }} }}
   </style>
 </head>
 <body>
@@ -125,18 +121,6 @@ def render_html(report: dict[str, Any]) -> str:
   <div class="summary">{summary_metrics}</div>
   {project_sections}
 </main>
-<script>
-  document.querySelectorAll("[data-tab-target]").forEach((button) => {{
-    button.addEventListener("click", () => {{
-      const group = button.closest(".tabs");
-      group.querySelectorAll("[data-tab-target]").forEach((item) => item.classList.remove("is-active"));
-      group.querySelectorAll(".tab-panel").forEach((item) => item.classList.remove("is-active"));
-      button.classList.add("is-active");
-      const panel = group.querySelector(button.dataset.tabTarget);
-      if (panel) panel.classList.add("is-active");
-    }});
-  }});
-</script>
 </body>
 </html>
 """
@@ -160,54 +144,29 @@ def render_project(project: dict[str, Any]) -> str:
   <div class="project-head">
     <h2>{html.escape(project["name"])}</h2>
   </div>
-  {iterations}
+  <div class="iteration-list">{iterations}</div>
 </section>"""
 
 
 def render_iteration(iteration: dict[str, Any]) -> str:
-    tabs = render_iteration_tabs(iteration)
-    return f"""<div class="iteration">
+    visible_members = [member for member in iteration["members"] if not member_bug_metrics_hidden(member)]
+    defects = render_defect_panel(visible_members, iteration.get("summary"))
+    product_requirements = render_product_requirements_panel(iteration_product_requirements(iteration))
+    return f"""<div class="iteration-card">
   <div class="iteration-head">
     <h3>{html.escape(iteration["name"])}</h3>
   </div>
-  {tabs}
+  <div class="iteration-grid">
+    {defects}
+    {product_requirements}
+  </div>
 </div>"""
 
 
-def render_iteration_tabs(iteration: dict[str, Any]) -> str:
-    tab_id = safe_dom_id(iteration["iteration_id"])
-    visible_members = [member for member in iteration["members"] if not member_bug_metrics_hidden(member)]
-    hidden_members = [member for member in iteration["members"] if member_bug_metrics_hidden(member)]
-    panels = [
-        (
-            "defects",
-            "今日缺陷",
-            render_defect_panel(visible_members, iteration.get("summary")),
-        ),
-        (
-            "requirements",
-            "需求排期",
-            render_requirements(iteration["requirements"]),
-        ),
-    ]
-    for member in hidden_members:
-        label = requirement_tab_label(member)
-        member_requirements = requirements_for_member(iteration["requirements"], member)
-        panels.append((f"requirements-{safe_dom_id(member['tapd_user'])}", label, render_requirements(member_requirements)))
-
-    buttons = []
-    contents = []
-    for index, (panel_key, label, content) in enumerate(panels):
-        panel_id = f"tab-{tab_id}-{panel_key}"
-        active_class = " is-active" if index == 0 else ""
-        buttons.append(
-            f'<button type="button" class="tab-button{active_class}" data-tab-target="#{panel_id}">{html.escape(label)}</button>'
-        )
-        contents.append(f'<div id="{panel_id}" class="tab-panel{active_class}">{content}</div>')
-
-    return f"""<div class="tabs">
-  <div class="tab-list">{"".join(buttons)}</div>
-  {"".join(contents)}
+def render_product_requirements_panel(requirements: list[dict[str, Any]]) -> str:
+    return f"""<div class="panel">
+  <div class="panel-head"><h4>产品总需求</h4><div class="subtle">{len(requirements)} 条</div></div>
+  {render_requirements(requirements, empty_message="暂无产品总需求。")}
 </div>"""
 
 
@@ -225,7 +184,7 @@ def render_defect_panel(members: list[dict[str, Any]], summary: dict[str, Any] |
     )
     return f"""<div class="panel">
   <div class="panel-head"><h4>今日缺陷</h4><div class="subtle">按当天时间统计</div></div>
-  <div class="tab-metrics">{metric_cards}</div>
+  <div class="defect-metrics">{metric_cards}</div>
   {render_member_table(members)}
 </div>"""
 
@@ -289,9 +248,9 @@ def member_bug_metrics_hidden(member: dict[str, Any]) -> bool:
     return bool(member.get("hide_bug_metrics")) or member.get("tapd_user") in hidden_users or member.get("name") in hidden_names
 
 
-def render_requirements(requirements: list[dict[str, Any]]) -> str:
+def render_requirements(requirements: list[dict[str, Any]], empty_message: str = "暂无产品总需求。") -> str:
     if not requirements:
-        return '<p class="empty">暂无产品需求排期。</p>'
+        return f'<p class="empty">{html.escape(empty_message)}</p>'
     rows = "\n".join(
         f"""<tr>
   <td>{render_requirement_link(item)}</td>
@@ -310,24 +269,16 @@ def render_requirements(requirements: list[dict[str, Any]]) -> str:
 </div>"""
 
 
-def requirements_for_member(requirements: list[dict[str, Any]], member: dict[str, Any]) -> list[dict[str, Any]]:
-    user = member.get("tapd_user")
-    name = member.get("name")
+def iteration_product_requirements(iteration: dict[str, Any]) -> list[dict[str, Any]]:
+    if "product_requirements" in iteration:
+        return list(iteration["product_requirements"])
+    product_users = {"Tora", "nianqiongyue"}
+    product_names = {"黄寅子", "粘琼月"}
     return [
         requirement
-        for requirement in requirements
-        if requirement.get("product_manager_user") == user or requirement.get("product_manager") == name
+        for requirement in iteration.get("requirements", [])
+        if requirement.get("product_manager_user") in product_users or requirement.get("product_manager") in product_names
     ]
-
-
-def requirement_tab_label(member: dict[str, Any]) -> str:
-    if member.get("tapd_user") == "Tora":
-        return "Tora 需求"
-    return f"{member.get('name', member.get('tapd_user', '成员'))}需求"
-
-
-def safe_dom_id(value: Any) -> str:
-    return "".join(ch if str(ch).isalnum() else "-" for ch in str(value)).strip("-") or "panel"
 
 
 def render_requirement_link(item: dict[str, Any]) -> str:
@@ -374,7 +325,15 @@ def write_summary_png(report: dict[str, Any], output_dir: Path) -> Path:
             y += 36
             y = draw_png_members(draw, iteration["members"], margin + 24, y, width - margin * 2 - 48, body_font, small_font)
             y += 14
-            y = draw_png_requirements(draw, iteration["requirements"], margin + 24, y, width - margin * 2 - 48, body_font, small_font)
+            y = draw_png_requirements(
+                draw,
+                iteration_product_requirements(iteration),
+                margin + 24,
+                y,
+                width - margin * 2 - 48,
+                body_font,
+                small_font,
+            )
             y += 18
         y = section_top + section_height + 22
 
@@ -395,7 +354,7 @@ def estimate_project_height(project: dict[str, Any]) -> int:
     height = 78
     for iteration in project["iterations"]:
         member_rows = max(1, (len(iteration["members"]) + 5) // 6)
-        requirement_rows = max(1, len(iteration["requirements"]))
+        requirement_rows = max(1, len(iteration_product_requirements(iteration)))
         height += 42 + member_rows * 112 + 34 + requirement_rows * 30 + 34
     return height
 
@@ -472,10 +431,10 @@ def draw_png_requirements(
     body_font: ImageFont.ImageFont,
     small_font: ImageFont.ImageFont,
 ) -> int:
-    draw.text((x, y), "产品需求排期", fill="#172033", font=body_font)
+    draw.text((x, y), "产品总需求", fill="#172033", font=body_font)
     y += 30
     if not requirements:
-        draw.text((x, y), "暂无产品需求排期。", fill="#64748b", font=small_font)
+        draw.text((x, y), "暂无产品总需求。", fill="#64748b", font=small_font)
         return y + 28
 
     for requirement in requirements[:8]:

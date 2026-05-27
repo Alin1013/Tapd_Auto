@@ -114,18 +114,10 @@ def collect_live_data(config: dict[str, Any], client: TapdClient) -> tuple[dict[
             )
             workspace_info["stories"] = unwrap_tapd_data(client.get_json("stories/get_fields_info", {"workspace_id": workspace_id}))
 
+        project["iterations"] = discover_project_iterations(project, client, workspace_info)
+
         for iteration in project["iterations"]:
             iteration_id = str(iteration["iteration_id"])
-            iteration_payload = client.get_json(
-                "iterations",
-                {
-                    "workspace_id": workspace_id,
-                    "id": iteration_id,
-                    "fields": "id,name,workspace_id,startdate,enddate,status,created,modified,completed",
-                },
-            )
-            workspace_info["iterations"].append(unwrap_tapd_data(iteration_payload))
-
             common_params = {"workspace_id": workspace_id, "iteration_id": iteration_id}
             raw_data["tasks"].extend(
                 client.get_paginated(
@@ -201,6 +193,34 @@ def collect_live_data(config: dict[str, Any], client: TapdClient) -> tuple[dict[
             )
 
     return raw_data, field_info
+
+
+def discover_project_iterations(project: dict[str, Any], client: TapdClient, workspace_info: dict[str, Any]) -> list[dict[str, Any]]:
+    """live 模式自动遍历项目下打开的迭代，未发现时回退到配置迭代。"""
+
+    workspace_id = str(project["workspace_id"])
+    discovered = client.get_paginated(
+        "iterations",
+        {
+            "workspace_id": workspace_id,
+            "status": "open",
+            "fields": "id,name,workspace_id,startdate,enddate,status,created,modified,completed",
+        },
+    )
+    workspace_info["iterations"] = discovered
+    if not discovered:
+        return project["iterations"]
+    return [
+        {
+            "name": item.get("name") or item.get("title") or str(item.get("id", "")),
+            "iteration_id": str(item.get("id") or item.get("iteration_id")),
+            "status": item.get("status", ""),
+            "start": item.get("startdate", ""),
+            "end": item.get("enddate", ""),
+        }
+        for item in discovered
+        if item.get("id") or item.get("iteration_id")
+    ]
 
 
 def join_fields(fields: list[str]) -> str:

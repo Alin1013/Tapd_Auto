@@ -64,7 +64,6 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
         product_managers = {pm["tapd_user"]: pm["name"] for pm in project.get("product_managers", [])}
 
         for iteration in project["iterations"]:
-            summary["iteration_count"] += 1
             member_results = []
             iteration_summary = {
                 "member_count": 0,
@@ -130,6 +129,11 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
                 fields["story_pm"],
                 status_labels.get("stories", {}),
             )
+            product_requirements = build_product_requirements(requirements)
+            if not iteration_has_report_content(iteration_summary, product_requirements):
+                continue
+
+            summary["iteration_count"] += 1
             project_result["iterations"].append(
                 {
                     "name": iteration["name"],
@@ -137,6 +141,7 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
                     "summary": iteration_summary,
                     "members": member_results,
                     "requirements": requirements,
+                    "product_requirements": product_requirements,
                 }
             )
 
@@ -172,16 +177,28 @@ def build_requirements(
         raw_status = str(story.get("v_status") or story.get("status", ""))
         requirements.append(
             {
-                "title": story.get("title") or story.get("name", ""),
+                "title": first_non_empty_text(story.get("title"), story.get("name")),
                 "product_manager": product_managers.get(matched_user, matched_user),
                 "product_manager_user": matched_user,
                 "status": status_labels.get(raw_status, raw_status),
-                "start": story.get("start") or story.get("begin", ""),
-                "end": story.get("end") or story.get("due", ""),
-                "url": story.get("url", ""),
+                "start": first_non_empty_text(story.get("start"), story.get("begin")),
+                "end": first_non_empty_text(story.get("end"), story.get("due")),
+                "url": first_non_empty_text(story.get("url")),
             }
         )
     return sorted(requirements, key=lambda item: (item["start"], item["end"], item["title"]))
+
+
+def build_product_requirements(requirements: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        requirement
+        for requirement in requirements
+        if requirement.get("product_manager_user") in HIDDEN_BUG_USERS or requirement.get("product_manager") in HIDDEN_BUG_NAMES
+    ]
+
+
+def iteration_has_report_content(summary: dict[str, int], product_requirements: list[dict[str, Any]]) -> bool:
+    return any(int(summary[key]) > 0 for key in ["bugs_closed", "bugs_open", "bugs_new"]) or bool(product_requirements)
 
 
 def normalize_record(item: dict[str, Any]) -> dict[str, Any]:
@@ -237,6 +254,13 @@ def first_matching_value(item: dict[str, Any], field_name: str, users: set[str])
         if value_text in users:
             return value_text
     return None
+
+
+def first_non_empty_text(*values: Any) -> str:
+    for value in values:
+        if value is not None and value != "":
+            return str(value)
+    return ""
 
 
 def split_people(raw_value: Any) -> list[str]:

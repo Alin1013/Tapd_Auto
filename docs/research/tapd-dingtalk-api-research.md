@@ -370,12 +370,11 @@ Notifier
    - `/tasks/get_fields_info`
    - `/bugs/get_fields_info?all_options=1`
    - `/stories/get_fields_info`
-5. 对每个项目迭代拉：
-   - `/iterations` 校验迭代
+5. 对每个项目拉 `/iterations?status=open` 发现打开迭代，再逐个迭代拉：
    - `/tasks` 拉任务列表
    - `/bugs` 拉缺陷列表
    - `/stories` 拉需求列表
-6. 本地按人员和产品经理聚合。
+6. 本地按项目、迭代、人员聚合今日缺陷，并将 Tora 与粘琼月负责的需求合并为“产品总需求”。
 7. 生成 HTML 和 PNG。
 8. 用钉钉发送适配器发送 Markdown 消息；Webhook 过渡版走群自定义机器人，长期版走应用机器人。
 

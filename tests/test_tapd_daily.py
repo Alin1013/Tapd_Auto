@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import tapd_auto as td
+import tapd_auto.render as render_module
 
 
 CONFIG_TEXT = """
@@ -202,7 +203,12 @@ class TapdDailyTests(unittest.TestCase):
         self.assertEqual(iteration["requirements"][0]["title"], "包装数据也能展示")
 
     def test_build_report_uses_configured_story_status_labels(self):
-        config = td.load_config_from_text(CONFIG_TEXT, env={})
+        config_text = CONFIG_TEXT.replace(
+            "    product_managers:\n      - name: 雷艾琳\n        tapd_user: leiailin",
+            "    product_managers:\n      - name: 雷艾琳\n        tapd_user: leiailin\n"
+            "      - name: 黄寅子\n        tapd_user: Tora",
+        )
+        config = td.load_config_from_text(config_text, env={})
         raw_data = {
             "tasks": [],
             "bugs": [],
@@ -210,7 +216,7 @@ class TapdDailyTests(unittest.TestCase):
                 {
                     "workspace_id": "33002756",
                     "iteration_id": "1133002756001001828",
-                    "owner": "leiailin",
+                    "owner": "Tora",
                     "name": "状态映射验证",
                     "status": "status_17",
                 }
@@ -220,18 +226,21 @@ class TapdDailyTests(unittest.TestCase):
         report = td.build_report(config, raw_data, report_date="2026-05-26")
 
         self.assertEqual(report["projects"][0]["iterations"][0]["requirements"][0]["status"], "已提测")
+        self.assertEqual(report["projects"][0]["iterations"][0]["product_requirements"][0]["status"], "已提测")
 
     def test_build_report_keeps_member_bug_visibility_rule(self):
         config_text = CONFIG_TEXT.replace(
-            "tapd_user: leiailin\n        role: 当前账号",
-            "tapd_user: leiailin\n        role: 当前账号\n        hide_bug_metrics: true",
+            "      - name: 雷艾琳\n        tapd_user: leiailin\n        role: 当前账号",
+            "      - name: 雷艾琳\n        tapd_user: leiailin\n        role: 当前账号\n"
+            "      - name: 黄寅子\n        tapd_user: Tora\n        role: 团队成员\n        hide_bug_metrics: true",
         )
         config = td.load_config_from_text(config_text, env={})
         report = td.build_report(config, RAW_DATA, report_date="2026-05-26")
 
-        leiailin = report["projects"][0]["iterations"][0]["members"][0]
+        members = report["projects"][0]["iterations"][0]["members"]
+        tora = next(member for member in members if member["tapd_user"] == "Tora")
 
-        self.assertTrue(leiailin.get("hide_bug_metrics"))
+        self.assertTrue(tora.get("hide_bug_metrics"))
 
     def test_build_report_uses_today_window_for_bug_metrics(self):
         config = td.load_config_from_text(CONFIG_TEXT, env={})
@@ -318,6 +327,61 @@ class TapdDailyTests(unittest.TestCase):
         self.assertEqual(report["projects"][0]["iterations"][0]["summary"]["bugs_open"], 1)
         self.assertEqual(report["projects"][0]["iterations"][0]["summary"]["bugs_new"], 1)
 
+    def test_build_report_groups_daily_content_by_iteration_and_skips_empty_iterations(self):
+        config_text = CONFIG_TEXT.replace(
+            "      - name: Deepexi Foil V1.0.0\n        iteration_id: \"1133002756001001828\"",
+            "      - name: Deepexi Foil V1.0.0\n        iteration_id: \"1133002756001001828\"\n"
+            "      - name: Deepexi Foil V1.1.0\n        iteration_id: \"1133002756001001869\"\n"
+            "      - name: 空迭代\n        iteration_id: \"empty-iteration\"",
+        ).replace(
+            "    product_managers:\n      - name: 雷艾琳\n        tapd_user: leiailin",
+            "      - name: 黄寅子\n        tapd_user: Tora\n        role: 产品\n        hide_bug_metrics: true\n"
+            "    product_managers:\n      - name: 雷艾琳\n        tapd_user: leiailin\n"
+            "      - name: 黄寅子\n        tapd_user: Tora",
+        )
+        config = td.load_config_from_text(config_text, env={})
+        raw_data = {
+            "tasks": [],
+            "bugs": [
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001828",
+                    "current_owner": "leiailin",
+                    "status": "in_progress",
+                    "created": "2026-05-26 09:00:00",
+                },
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001869",
+                    "current_owner": "leiailin",
+                    "status": "closed",
+                    "created": "2026-05-26 10:00:00",
+                    "closed": "2026-05-26 18:00:00",
+                },
+            ],
+            "stories": [
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001869",
+                    "owner": "Tora",
+                    "name": "V1.1 产品总需求",
+                    "status": "status_17",
+                }
+            ],
+        }
+
+        report = td.build_report(config, raw_data, report_date="2026-05-26")
+        iterations = report["projects"][0]["iterations"]
+
+        self.assertEqual(report["summary"]["iteration_count"], 2)
+        self.assertEqual([item["name"] for item in iterations], ["Deepexi Foil V1.0.0", "Deepexi Foil V1.1.0"])
+        self.assertEqual(iterations[0]["summary"]["bugs_open"], 1)
+        self.assertEqual(iterations[0]["summary"]["bugs_new"], 1)
+        self.assertEqual(iterations[1]["summary"]["bugs_open"], 0)
+        self.assertEqual(iterations[1]["summary"]["bugs_new"], 1)
+        self.assertEqual(iterations[1]["summary"]["bugs_closed"], 1)
+        self.assertEqual(iterations[1]["product_requirements"][0]["title"], "V1.1 产品总需求")
+
     def test_render_markdown_contains_clear_daily_summary(self):
         config = td.load_config_from_text(CONFIG_TEXT, env={})
         report = td.build_report(config, RAW_DATA, report_date="2026-05-26")
@@ -342,7 +406,6 @@ class TapdDailyTests(unittest.TestCase):
         self.assertNotIn("任务总数", html)
         self.assertNotIn("任务完成率", html)
         self.assertIn("雷艾琳", html)
-        self.assertIn("真实配置同步范围", html)
         self.assertNotIn("workspace_id:", html)
         self.assertNotIn("iteration_id:", html)
 
@@ -428,7 +491,7 @@ class TapdDailyTests(unittest.TestCase):
         self.assertNotIn("8/8", html)
         self.assertNotIn("任务 4/8", html)
 
-    def test_render_html_adds_requirement_tabs_for_tora_and_nianqiongyue(self):
+    def test_render_html_adds_combined_product_requirements_part(self):
         report = {
             "date": "2026-05-26",
             "timezone": "Asia/Shanghai",
@@ -476,6 +539,26 @@ class TapdDailyTests(unittest.TestCase):
                                     "product_manager": "雷艾琳",
                                     "product_manager_user": "leiailin",
                                     "status": "规划中",
+                                    "start": "2026-05-26",
+                                    "end": "2026-05-30",
+                                    "url": "",
+                                },
+                            ],
+                            "product_requirements": [
+                                {
+                                    "title": "Tora 需求内容",
+                                    "product_manager": "黄寅子",
+                                    "product_manager_user": "Tora",
+                                    "status": "已提测",
+                                    "start": "2026-05-25",
+                                    "end": "2026-05-29",
+                                    "url": "",
+                                },
+                                {
+                                    "title": "粘琼月需求内容",
+                                    "product_manager": "粘琼月",
+                                    "product_manager_user": "nianqiongyue",
+                                    "status": "开发实现",
                                     "start": "2026-05-26",
                                     "end": "2026-05-30",
                                     "url": "",
@@ -530,15 +613,184 @@ class TapdDailyTests(unittest.TestCase):
         html = td.render_html(report)
 
         self.assertIn("今日缺陷", html)
-        self.assertIn("Tora 需求", html)
-        self.assertIn("粘琼月需求", html)
+        self.assertIn("产品总需求", html)
         self.assertIn("Tora 需求内容", html)
         self.assertIn("粘琼月需求内容", html)
+        self.assertNotIn("Tora 需求</button>", html)
+        self.assertNotIn("粘琼月需求</button>", html)
+        self.assertNotIn("其他需求内容", html)
         self.assertNotIn("未解 22", html)
         self.assertNotIn("未解 33", html)
 
+    def test_render_html_uses_one_scroll_card_per_iteration(self):
+        report = {
+            "date": "2026-05-26",
+            "timezone": "Asia/Shanghai",
+            "summary": {
+                "project_count": 1,
+                "iteration_count": 2,
+                "member_count": 1,
+                "task_total": 0,
+                "task_done": 0,
+                "task_completion_rate": 0,
+                "bugs_closed": 1,
+                "bugs_open": 1,
+                "bugs_new": 2,
+            },
+            "projects": [
+                {
+                    "name": "Deepexi Foil",
+                    "workspace_id": "33002756",
+                    "iterations": [
+                        {
+                            "name": "Deepexi Foil V1.0.0",
+                            "iteration_id": "i1",
+                            "summary": {"member_count": 1, "bugs_open": 1, "bugs_new": 1, "bugs_closed": 0},
+                            "requirements": [],
+                            "product_requirements": [],
+                            "members": [
+                                {
+                                    "name": "雷艾琳",
+                                    "tapd_user": "leiailin",
+                                    "role": "当前账号",
+                                    "tapd_report_url": "",
+                                    "task_total": 0,
+                                    "task_done": 0,
+                                    "task_completion_rate": 0,
+                                    "bugs_closed": 0,
+                                    "bugs_open": 1,
+                                    "bugs_new": 1,
+                                }
+                            ],
+                        },
+                        {
+                            "name": "Deepexi Foil V1.1.0",
+                            "iteration_id": "i2",
+                            "summary": {"member_count": 1, "bugs_open": 0, "bugs_new": 1, "bugs_closed": 1},
+                            "requirements": [],
+                            "product_requirements": [],
+                            "members": [
+                                {
+                                    "name": "雷艾琳",
+                                    "tapd_user": "leiailin",
+                                    "role": "当前账号",
+                                    "tapd_report_url": "",
+                                    "task_total": 0,
+                                    "task_done": 0,
+                                    "task_completion_rate": 0,
+                                    "bugs_closed": 1,
+                                    "bugs_open": 0,
+                                    "bugs_new": 1,
+                                }
+                            ],
+                        },
+                    ],
+                }
+            ],
+        }
+
+        html = td.render_html(report)
+
+        self.assertIn('class="iteration-card"', html)
+        self.assertIn("Deepexi Foil V1.0.0", html)
+        self.assertIn("Deepexi Foil V1.1.0", html)
+        self.assertEqual(html.count('class="iteration-card"'), 2)
+        self.assertNotIn("tab-button", html)
+
+    def test_summary_png_uses_combined_product_requirements(self):
+        report = {
+            "date": "2026-05-26",
+            "timezone": "Asia/Shanghai",
+            "summary": {
+                "project_count": 1,
+                "iteration_count": 1,
+                "member_count": 1,
+                "task_total": 0,
+                "task_done": 0,
+                "task_completion_rate": 0,
+                "bugs_closed": 0,
+                "bugs_open": 1,
+                "bugs_new": 1,
+            },
+            "projects": [
+                {
+                    "name": "Deepexi Foil",
+                    "workspace_id": "33002756",
+                    "iterations": [
+                        {
+                            "name": "Deepexi Foil V1.0.0",
+                            "iteration_id": "i1",
+                            "summary": {"member_count": 1, "bugs_open": 1, "bugs_new": 1, "bugs_closed": 0},
+                            "requirements": [
+                                {
+                                    "title": "其他产品需求",
+                                    "product_manager": "雷艾琳",
+                                    "product_manager_user": "leiailin",
+                                    "status": "规划中",
+                                    "start": "",
+                                    "end": "",
+                                    "url": "",
+                                },
+                                {
+                                    "title": "产品总需求",
+                                    "product_manager": "黄寅子",
+                                    "product_manager_user": "Tora",
+                                    "status": "已提测",
+                                    "start": "",
+                                    "end": "",
+                                    "url": "",
+                                },
+                            ],
+                            "product_requirements": [
+                                {
+                                    "title": "产品总需求",
+                                    "product_manager": "黄寅子",
+                                    "product_manager_user": "Tora",
+                                    "status": "已提测",
+                                    "start": "",
+                                    "end": "",
+                                    "url": "",
+                                }
+                            ],
+                            "members": [
+                                {
+                                    "name": "雷艾琳",
+                                    "tapd_user": "leiailin",
+                                    "role": "当前账号",
+                                    "tapd_report_url": "",
+                                    "task_total": 0,
+                                    "task_done": 0,
+                                    "task_completion_rate": 0,
+                                    "bugs_closed": 0,
+                                    "bugs_open": 1,
+                                    "bugs_new": 1,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        captured_titles = []
+
+        def capture_requirements(draw, requirements, x, y, width, body_font, small_font):
+            captured_titles.extend(item["title"] for item in requirements)
+            return y + 30
+
+        with tempfile.TemporaryDirectory() as tmpdir, patch.object(
+            render_module, "draw_png_requirements", side_effect=capture_requirements
+        ):
+            td.write_summary_png(report, Path(tmpdir))
+
+        self.assertEqual(captured_titles, ["产品总需求"])
+
     def test_render_html_handles_empty_requirement_dates(self):
-        config = td.load_config_from_text(CONFIG_TEXT, env={})
+        config_text = CONFIG_TEXT.replace(
+            "    product_managers:\n      - name: 雷艾琳\n        tapd_user: leiailin",
+            "    product_managers:\n      - name: 雷艾琳\n        tapd_user: leiailin\n"
+            "      - name: 黄寅子\n        tapd_user: Tora",
+        )
+        config = td.load_config_from_text(config_text, env={})
         raw_data = {
             "tasks": [],
             "bugs": [],
@@ -546,12 +798,21 @@ class TapdDailyTests(unittest.TestCase):
                 {
                     "workspace_id": "33002756",
                     "iteration_id": "1133002756001001828",
-                    "owner": "leiailin",
+                    "owner": "Tora",
                     "name": "空日期需求",
                     "status": "status_17",
                     "begin": None,
                     "due": None,
-                }
+                },
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001828",
+                    "owner": "Tora",
+                    "name": "有日期需求",
+                    "status": "status_17",
+                    "begin": "2026-05-25",
+                    "due": "2026-05-30",
+                },
             ],
         }
         report = td.build_report(config, raw_data, report_date="2026-05-26")
@@ -559,7 +820,9 @@ class TapdDailyTests(unittest.TestCase):
         html = td.render_html(report)
 
         self.assertIn("空日期需求", html)
+        self.assertIn("有日期需求", html)
         self.assertIn("已提测", html)
+        self.assertNotIn(">None<", html)
 
     def test_write_report_outputs_html_markdown_and_json(self):
         config = td.load_config_from_text(CONFIG_TEXT, env={})
@@ -644,25 +907,63 @@ class TapdDailyTests(unittest.TestCase):
 
             def get_paginated(self, path, params=None):
                 self.paginated_calls.append((path, params or {}))
+                if path == "iterations":
+                    return [
+                        {
+                            "workspace_id": "33002756",
+                            "id": "1133002756001001828",
+                            "name": "Deepexi Foil V1.0.0",
+                            "status": "open",
+                        },
+                        {
+                            "workspace_id": "33002756",
+                            "id": "1133002756001001869",
+                            "name": "Deepexi Foil V1.1.0",
+                            "status": "open",
+                        },
+                    ]
                 if path == "tasks":
-                    return [{"workspace_id": "33002756", "iteration_id": "1133002756001001828", "owner": "leiailin", "status": "done"}]
+                    return [
+                        {
+                            "workspace_id": "33002756",
+                            "iteration_id": (params or {}).get("iteration_id"),
+                            "owner": "leiailin",
+                            "status": "done",
+                        }
+                    ]
                 if path == "bugs":
-                    return [{"workspace_id": "33002756", "iteration_id": "1133002756001001828", "current_owner": "leiailin;", "status": "closed"}]
+                    return [
+                        {
+                            "workspace_id": "33002756",
+                            "iteration_id": (params or {}).get("iteration_id"),
+                            "current_owner": "leiailin;",
+                            "status": "closed",
+                        }
+                    ]
                 if path == "stories":
-                    return [{"workspace_id": "33002756", "iteration_id": "1133002756001001828", "owner": "leiailin", "name": "真实需求"}]
+                    return [
+                        {
+                            "workspace_id": "33002756",
+                            "iteration_id": (params or {}).get("iteration_id"),
+                            "owner": "leiailin",
+                            "name": "真实需求",
+                        }
+                    ]
                 return []
 
         config = td.load_config_from_text(CONFIG_TEXT, env={})
         raw_data, field_info = td.collect_live_data(config, FakeTapdClient())
 
-        self.assertEqual(len(raw_data["tasks"]), 1)
-        self.assertEqual(len(raw_data["bugs"]), 1)
-        self.assertEqual(len(raw_data["stories"]), 1)
+        self.assertEqual([item["iteration_id"] for item in config["projects"][0]["iterations"]], ["1133002756001001828", "1133002756001001869"])
+        self.assertEqual(len(raw_data["tasks"]), 2)
+        self.assertEqual(len(raw_data["bugs"]), 2)
+        self.assertEqual(len(raw_data["stories"]), 2)
         self.assertIn("33002756", field_info["workspaces"])
         self.assertEqual(field_info["workspaces"]["33002756"]["tasks"]["path"], "tasks/get_fields_info")
         self.assertEqual(field_info["workspaces"]["33002756"]["bugs"]["path"], "bugs/get_fields_info")
         self.assertEqual(field_info["workspaces"]["33002756"]["stories"]["path"], "stories/get_fields_info")
-        self.assertEqual(field_info["workspaces"]["33002756"]["iterations"][0]["path"], "iterations")
+        self.assertEqual(field_info["workspaces"]["33002756"]["iterations"][0]["name"], "Deepexi Foil V1.0.0")
+        self.assertEqual(field_info["workspaces"]["33002756"]["iterations"][1]["name"], "Deepexi Foil V1.1.0")
 
     def test_send_dingtalk_report_posts_signed_markdown_payload(self):
         config = td.load_config_from_text(

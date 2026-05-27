@@ -157,7 +157,7 @@ cron 示例见 `scripts/crontab.example`。
 
 - 当前 TAPD 账号：`leiailin` / 雷艾琳。
 - 当前真实项目：Deepexi Foil，`workspace_id=33002756`。
-- 当前配置迭代：Deepexi Foil V1.0.0，`iteration_id=1133002756001001828`。
+- 示例配置迭代：Deepexi Foil V1.0.0，`iteration_id=1133002756001001828`；live 模式会自动遍历项目下的打开迭代。
 - 当前团队成员已按截图名单同步到配置，映射见 `docs/operations/account-sync.md`。
 - 本地真实运行配置在 `configs/config.yaml`，该文件不提交到 Git。
 
@@ -166,7 +166,7 @@ cron 示例见 `scripts/crontab.example`。
 - 成员角色、详情链接和手机号。
 - 是否需要把产品经理配置从团队成员中单独拆出来。
 - 钉钉机器人 webhook 和加签 secret。
-- 如后续新增项目，需要补充对应 `workspace_id` 和 `iteration_id`。
+- 如后续新增项目，需要补充对应 `workspace_id`；live 模式会自动发现打开迭代，dry-run 示例才需要补 `iteration_id`。
 
 ## 接口规则
 
@@ -182,10 +182,10 @@ cron 示例见 `scripts/crontab.example`。
 ## 当前链路
 
 1. 从 `.env` 读取 TAPD token 和钉钉敏感配置。
-2. 从配置文件读取项目、迭代、成员、字段映射和状态映射。
+2. 从配置文件读取项目、成员、字段映射和状态映射；live 模式会自动遍历项目下的打开迭代。
 3. dry-run 模式使用 `sample_data`；live 模式调用 TAPD OpenAPI。
 4. live 模式先拉字段发现信息，再拉迭代、任务、缺陷、需求列表。
 5. 按人员聚合今日缺陷，日报展示未解决、今日新增、当日关闭；任务数据保留采集但页面和通知不展示任务数、完成率或进展。
-6. 按产品经理展示需求排期，并为 Tora、粘琼月提供独立需求标签页。
+6. 按迭代卡片展示今日缺陷，并将 Tora、粘琼月负责的需求合并到“产品总需求”区域。
 7. 输出 PNG、HTML、Markdown 和 JSON。
 8. 只有传入 `--send-dingtalk` 时才发送钉钉 Markdown。
