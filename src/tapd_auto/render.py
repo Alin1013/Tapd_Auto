@@ -54,8 +54,7 @@ def write_field_info(field_info: dict[str, Any], output_dir: Path) -> Path:
 
 def render_html(report: dict[str, Any]) -> str:
     project_sections = "\n".join(render_project(project) for project in report["projects"])
-    summary = report["summary"]
-    summary_metrics = render_html_summary_metrics(summary)
+    summary_metrics = render_html_summary_metrics(report)
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -80,6 +79,9 @@ def render_html(report: dict[str, Any]) -> str:
     .metric {{ padding: 14px 16px; min-height: 86px; }}
     .metric span {{ display: block; color: #667085; font-size: 13px; }}
     .metric strong {{ display: block; font-size: 25px; line-height: 1; margin-top: 10px; color: #111827; }}
+    .metric-text strong {{ font-size: 16px; line-height: 1.4; white-space: normal; }}
+    .metric-project {{ grid-column: span 2; }}
+    .metric-iterations {{ grid-column: span 4; }}
     section {{ padding: 18px; margin-top: 16px; }}
     .project-head, .iteration-head, .panel-head {{ display: flex; justify-content: space-between; gap: 14px; align-items: center; }}
     .iteration-list {{ display: grid; gap: 14px; margin-top: 14px; }}
@@ -105,7 +107,7 @@ def render_html(report: dict[str, Any]) -> str:
     .empty {{ margin: 12px 0 0; padding: 14px; border: 1px dashed #ccd6e0; border-radius: 8px; color: #667085; background: #fbfcfd; }}
     a {{ color: #1769c2; text-decoration: none; }}
     a:hover {{ text-decoration: underline; }}
-    @media (max-width: 920px) {{ .summary {{ grid-template-columns: repeat(3, 1fr); }} .iteration-grid {{ grid-template-columns: 1fr; }} .defect-metrics {{ grid-template-columns: repeat(2, 1fr); }} header {{ align-items: flex-start; flex-direction: column; }} }}
+    @media (max-width: 920px) {{ .summary {{ grid-template-columns: repeat(3, 1fr); }} .metric-project, .metric-iterations {{ grid-column: 1 / -1; }} .iteration-grid {{ grid-template-columns: 1fr; }} .defect-metrics {{ grid-template-columns: repeat(2, 1fr); }} header {{ align-items: flex-start; flex-direction: column; }} }}
     @media (max-width: 560px) {{ main {{ padding: 20px 12px; }} .summary {{ grid-template-columns: repeat(2, 1fr); }} .defect-metrics {{ grid-template-columns: 1fr; }} .project-head, .iteration-head, .panel-head {{ align-items: flex-start; flex-direction: column; }} th, td {{ padding: 9px 8px; }} }}
   </style>
 </head>
@@ -126,7 +128,13 @@ def render_html(report: dict[str, Any]) -> str:
 """
 
 
-def render_html_summary_metrics(summary: dict[str, Any]) -> str:
+def render_html_summary_metrics(report: dict[str, Any]) -> str:
+    summary = report["summary"]
+    scope = report_scope_summary(report)
+    scope_metrics = [
+        ("项目名称", scope["projects"], "metric metric-text metric-project"),
+        ("迭代名称", scope["iterations"], "metric metric-text metric-iterations"),
+    ]
     metrics = [
         ("项目", summary["project_count"]),
         ("迭代", summary["iteration_count"]),
@@ -135,7 +143,40 @@ def render_html_summary_metrics(summary: dict[str, Any]) -> str:
         ("今日新增缺陷", summary["bugs_new"]),
         ("当日关闭缺陷", summary["bugs_closed"]),
     ]
-    return "\n".join(f"""<div class="metric"><span>{html.escape(str(label))}</span><strong>{html.escape(str(value))}</strong></div>""" for label, value in metrics)
+    scope_cards = "\n".join(
+        f"""<div class="{css_class}"><span>{html.escape(str(label))}</span><strong>{html.escape(str(value))}</strong></div>"""
+        for label, value, css_class in scope_metrics
+    )
+    metric_cards = "\n".join(
+        f"""<div class="metric"><span>{html.escape(str(label))}</span><strong>{html.escape(str(value))}</strong></div>"""
+        for label, value in metrics
+    )
+    return "\n".join([scope_cards, metric_cards])
+
+
+def report_scope_summary(report: dict[str, Any]) -> dict[str, str]:
+    project_names = unique_non_empty(project.get("name") for project in report.get("projects", []))
+    iteration_names = unique_non_empty(
+        iteration.get("name")
+        for project in report.get("projects", [])
+        for iteration in project.get("iterations", [])
+    )
+    return {
+        "projects": "、".join(project_names) or "-",
+        "iterations": "、".join(iteration_names) or "-",
+    }
+
+
+def unique_non_empty(values: Any) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = str(value or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
 
 
 def render_project(project: dict[str, Any]) -> str:
@@ -310,6 +351,8 @@ def write_summary_png(report: dict[str, Any], output_dir: Path) -> Path:
 
     draw.text((margin, y), f"TAPD 每日复盘 {report['date']}", fill="#172033", font=title_font)
     y += 64
+    y = draw_png_scope_summary(draw, report, margin, y, width - margin * 2, body_font, small_font)
+    y += 14
     y = draw_png_summary_metrics(draw, report["summary"], margin, y, width - margin * 2, body_font, h2_font)
     y += 24
 
@@ -344,7 +387,7 @@ def write_summary_png(report: dict[str, Any], output_dir: Path) -> Path:
 
 
 def estimate_png_height(report: dict[str, Any]) -> int:
-    height = 190
+    height = 292
     for project in report["projects"]:
         height += estimate_project_height(project) + 22
     return max(height + 40, 520)
@@ -357,6 +400,25 @@ def estimate_project_height(project: dict[str, Any]) -> int:
         requirement_rows = max(1, len(iteration_product_requirements(iteration)))
         height += 42 + member_rows * 112 + 34 + requirement_rows * 30 + 34
     return height
+
+
+def draw_png_scope_summary(
+    draw: ImageDraw.ImageDraw,
+    report: dict[str, Any],
+    x: int,
+    y: int,
+    width: int,
+    body_font: ImageFont.ImageFont,
+    small_font: ImageFont.ImageFont,
+) -> int:
+    scope = report_scope_summary(report)
+    card_height = 88
+    draw.rounded_rectangle((x, y, x + width, y + card_height), radius=10, fill="#ffffff", outline="#dfe5ee")
+    draw.text((x + 16, y + 14), "项目名称", fill="#64748b", font=small_font)
+    draw.text((x + 100, y + 12), truncate_text(scope["projects"], 54), fill="#172033", font=body_font)
+    draw.text((x + 16, y + 50), "迭代名称", fill="#64748b", font=small_font)
+    draw.text((x + 100, y + 48), truncate_text(scope["iterations"], 86), fill="#172033", font=body_font)
+    return y + card_height
 
 
 def draw_png_summary_metrics(

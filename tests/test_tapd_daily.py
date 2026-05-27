@@ -409,6 +409,54 @@ class TapdDailyTests(unittest.TestCase):
         self.assertNotIn("workspace_id:", html)
         self.assertNotIn("iteration_id:", html)
 
+    def test_render_html_top_summary_includes_project_and_iteration_names(self):
+        report = {
+            "date": "2026-05-26",
+            "timezone": "Asia/Shanghai",
+            "summary": {
+                "project_count": 1,
+                "iteration_count": 2,
+                "member_count": 1,
+                "task_total": 0,
+                "task_done": 0,
+                "task_completion_rate": 0,
+                "bugs_closed": 1,
+                "bugs_open": 1,
+                "bugs_new": 2,
+            },
+            "projects": [
+                {
+                    "name": "Deepexi Foil",
+                    "workspace_id": "33002756",
+                    "iterations": [
+                        {
+                            "name": "Deepexi Foil V1.0.0",
+                            "iteration_id": "i1",
+                            "summary": {"member_count": 1, "bugs_open": 1, "bugs_new": 1, "bugs_closed": 0},
+                            "requirements": [],
+                            "product_requirements": [],
+                            "members": [],
+                        },
+                        {
+                            "name": "Deepexi Foil V1.1.0",
+                            "iteration_id": "i2",
+                            "summary": {"member_count": 1, "bugs_open": 0, "bugs_new": 1, "bugs_closed": 1},
+                            "requirements": [],
+                            "product_requirements": [],
+                            "members": [],
+                        },
+                    ],
+                }
+            ],
+        }
+
+        html = td.render_html(report)
+
+        self.assertIn("<span>项目名称</span>", html)
+        self.assertIn("<strong>Deepexi Foil</strong>", html)
+        self.assertIn("<span>迭代名称</span>", html)
+        self.assertIn("<strong>Deepexi Foil V1.0.0、Deepexi Foil V1.1.0</strong>", html)
+
     def test_render_html_hides_bug_metrics_for_configured_members(self):
         report = {
             "date": "2026-05-26",
@@ -783,6 +831,62 @@ class TapdDailyTests(unittest.TestCase):
             td.write_summary_png(report, Path(tmpdir))
 
         self.assertEqual(captured_titles, ["产品总需求"])
+
+    def test_summary_png_adds_project_and_iteration_names_to_top_scope(self):
+        report = {
+            "date": "2026-05-26",
+            "timezone": "Asia/Shanghai",
+            "summary": {
+                "project_count": 1,
+                "iteration_count": 2,
+                "member_count": 1,
+                "task_total": 0,
+                "task_done": 0,
+                "task_completion_rate": 0,
+                "bugs_closed": 1,
+                "bugs_open": 1,
+                "bugs_new": 2,
+            },
+            "projects": [
+                {
+                    "name": "Deepexi Foil",
+                    "workspace_id": "33002756",
+                    "iterations": [
+                        {
+                            "name": "Deepexi Foil V1.0.0",
+                            "iteration_id": "i1",
+                            "summary": {"member_count": 1, "bugs_open": 1, "bugs_new": 1, "bugs_closed": 0},
+                            "requirements": [],
+                            "product_requirements": [],
+                            "members": [],
+                        },
+                        {
+                            "name": "Deepexi Foil V1.1.0",
+                            "iteration_id": "i2",
+                            "summary": {"member_count": 1, "bugs_open": 0, "bugs_new": 1, "bugs_closed": 1},
+                            "requirements": [],
+                            "product_requirements": [],
+                            "members": [],
+                        },
+                    ],
+                }
+            ],
+        }
+        captured = []
+
+        def capture_scope(draw, report_arg, x, y, width, body_font, small_font):
+            captured.append(td.report_scope_summary(report_arg))
+            return y + 80
+
+        with tempfile.TemporaryDirectory() as tmpdir, patch.object(
+            render_module, "draw_png_scope_summary", side_effect=capture_scope
+        ):
+            td.write_summary_png(report, Path(tmpdir))
+
+        self.assertEqual(
+            captured,
+            [{"projects": "Deepexi Foil", "iterations": "Deepexi Foil V1.0.0、Deepexi Foil V1.1.0"}],
+        )
 
     def test_render_html_handles_empty_requirement_dates(self):
         config_text = CONFIG_TEXT.replace(
