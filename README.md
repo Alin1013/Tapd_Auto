@@ -153,14 +153,19 @@ cron 示例见 `scripts/crontab.example`。
 
 更完整的生产部署和回滚流程见 `docs/operations/production-runbook.md`。
 
+## 当前已同步信息
+
+- 当前 TAPD 账号：`leiailin` / 雷艾琳。
+- 当前真实项目：Deepexi Foil，`workspace_id=33002756`。
+- 当前配置迭代：Deepexi Foil V1.0.0，`iteration_id=1133002756001001828`。
+- 本地真实运行配置在 `configs/config.yaml`，该文件不提交到 Git。
+
 ## 后续需要补充的信息
 
-- TAPD 真实项目 `workspace_id`。
-- 每个项目的迭代 `iteration_id`。
-- 成员姓名、TAPD 用户标识、角色、详情链接。
+- 其他成员姓名、TAPD 用户标识、角色、详情链接。
 - 产品经理姓名和 TAPD 用户标识。
 - 钉钉机器人 webhook 和加签 secret。
-- TAPD 任务、缺陷、需求接口返回字段与当前工作区字段映射。
+- 如后续新增项目，需要补充对应 `workspace_id` 和 `iteration_id`。
 
 ## 接口规则
 

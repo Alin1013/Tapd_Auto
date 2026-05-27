@@ -6,9 +6,13 @@ tapd:
   task_done_statuses:
     - done
     - 已完成
-    - 已关闭
   bug_closed_statuses:
+    - resolved
+    - verified
+    - rejected
+    - closed
     - 已解决
+    - 已验证
     - 已关闭
     - 无需解决
   fields:
@@ -28,64 +32,41 @@ dingtalk:
   is_at_all: false
 
 projects:
-  - name: 示例项目
+  - name: Deepexi Foil
     workspace_id: "33002756"
     iterations:
-      - name: 2026-05 Sprint
-        iteration_id: "sprint-1"
+      - name: Deepexi Foil V1.0.0
+        iteration_id: "1133002756001001828"
     members:
-      - name: 张三
-        tapd_user: zhangsan
-        role: dev
-        tapd_report_url: https://tapd.cn/member/zhangsan
-      - name: 李四
-        tapd_user: lisi
-        role: test
-        tapd_report_url: https://tapd.cn/member/lisi
-    product_managers:
-      - name: 产品A
-        tapd_user: product_a
+      - name: 雷艾琳
+        tapd_user: leiailin
+        role: 当前账号
+        tapd_report_url: https://www.tapd.cn/33002756/prong/stories/stories_list
+    # 产品经理和其他成员后续由你补充，当前只同步 token 所属账号。
+    product_managers: []
 
-# dry-run 示例数据只用于本地验证链路，接入真实 TAPD 后可以删除。
+# dry-run 数据只用于本地验证链路；项目、迭代、人员保持真实，工作项标题使用脱敏占位。
 sample_data:
   tasks:
     - workspace_id: "33002756"
-      iteration_id: sprint-1
-      owner: zhangsan
-      status: 已完成
-      title: 完成日报页面
+      iteration_id: "1133002756001001828"
+      owner: leiailin
+      status: done
+      title: 本地链路验证任务
     - workspace_id: "33002756"
-      iteration_id: sprint-1
-      owner: zhangsan
-      status: 开发中
-      title: 接入 TAPD API
-    - workspace_id: "33002756"
-      iteration_id: sprint-1
-      owner: lisi
-      status: 已关闭
-      title: 验证日报输出
+      iteration_id: "1133002756001001828"
+      owner: leiailin
+      status: progressing
+      title: TAPD 配置同步检查
   bugs:
     - workspace_id: "33002756"
-      iteration_id: sprint-1
-      current_owner: zhangsan
-      status: 已关闭
+      iteration_id: "1133002756001001828"
+      current_owner: leiailin
+      status: closed
       created: "2026-05-26 10:30:00"
     - workspace_id: "33002756"
-      iteration_id: sprint-1
-      current_owner: zhangsan
-      status: 处理中
+      iteration_id: "1133002756001001828"
+      current_owner: leiailin
+      status: in_progress
       created: "2026-05-26 11:30:00"
-    - workspace_id: "33002756"
-      iteration_id: sprint-1
-      current_owner: lisi
-      status: 处理中
-      created: "2026-05-25 18:30:00"
-  stories:
-    - workspace_id: "33002756"
-      iteration_id: sprint-1
-      owner: product_a
-      name: 配置化日报范围
-      status: 规划中
-      begin: "2026-05-25"
-      due: "2026-05-29"
-      url: https://tapd.cn/story/1
+  stories: []

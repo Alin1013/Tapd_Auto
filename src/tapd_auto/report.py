@@ -6,8 +6,21 @@ import re
 from typing import Any
 
 
-DEFAULT_DONE_TASK_STATUSES = {"已完成", "已关闭", "完成", "关闭", "Done", "Closed"}
-DEFAULT_CLOSED_BUG_STATUSES = {"已解决", "已关闭", "无需解决", "关闭", "Done", "Closed", "Resolved"}
+DEFAULT_DONE_TASK_STATUSES = {"done", "已完成", "已关闭", "完成", "关闭", "Done", "Closed"}
+DEFAULT_CLOSED_BUG_STATUSES = {
+    "resolved",
+    "verified",
+    "rejected",
+    "closed",
+    "已解决",
+    "已验证",
+    "已关闭",
+    "无需解决",
+    "关闭",
+    "Done",
+    "Closed",
+    "Resolved",
+}
 DEFAULT_TAPD_FIELDS = {
     "task_owner": "owner",
     "bug_owner": "current_owner",

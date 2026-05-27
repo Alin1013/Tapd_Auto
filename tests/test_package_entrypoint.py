@@ -17,6 +17,10 @@ tapd:
     - done
     - 已完成
   bug_closed_statuses:
+    - resolved
+    - verified
+    - rejected
+    - closed
     - 已关闭
   fields:
     task_owner: owner
@@ -35,24 +39,24 @@ dingtalk:
   is_at_all: false
 
 projects:
-  - name: 入口测试项目
+  - name: Deepexi Foil
     workspace_id: "1"
     iterations:
-      - name: 入口测试迭代
+      - name: Deepexi Foil V1.0.0
         iteration_id: "i1"
     members:
-      - name: 张三
-        tapd_user: zhangsan
-        role: dev
+      - name: 雷艾琳
+        tapd_user: leiailin
+        role: 当前账号
     product_managers:
-      - name: 产品A
-        tapd_user: product_a
+      - name: 雷艾琳
+        tapd_user: leiailin
 
 sample_data:
   tasks:
     - workspace_id: "1"
       iteration_id: i1
-      owner: zhangsan
+      owner: leiailin
       status: done
   bugs: []
   stories: []

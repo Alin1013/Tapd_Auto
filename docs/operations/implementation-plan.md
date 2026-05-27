@@ -45,7 +45,7 @@
 
 ## 任务 4：补充示例配置和说明
 
-- [x] 新建 `configs/config.example.yaml`，保留示例项目、迭代、成员和产品经理字段。
+- [x] 新建 `configs/config.example.yaml`，保留真实项目、迭代、当前账号成员和后续成员补充位置。
 - [x] 新建 `requirements.txt`。
 - [x] 新建 `README.md`，用中文写清楚本地运行、配置补充、输出位置和后续待补信息。
 

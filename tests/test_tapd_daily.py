@@ -19,9 +19,13 @@ tapd:
   task_done_statuses:
     - done
     - 已完成
-    - 已关闭
   bug_closed_statuses:
+    - resolved
+    - verified
+    - rejected
+    - closed
     - 已解决
+    - 已验证
     - 已关闭
     - 无需解决
   fields:
@@ -41,22 +45,19 @@ dingtalk:
   is_at_all: false
 
 projects:
-  - name: 示例项目
+  - name: Deepexi Foil
     workspace_id: "33002756"
     iterations:
-      - name: 2026-05 Sprint
-        iteration_id: "sprint-1"
+      - name: Deepexi Foil V1.0.0
+        iteration_id: "1133002756001001828"
     members:
-      - name: 张三
-        tapd_user: zhangsan
-        role: dev
-        tapd_report_url: https://tapd.cn/member/zhangsan
-      - name: 李四
-        tapd_user: lisi
-        role: test
+      - name: 雷艾琳
+        tapd_user: leiailin
+        role: 当前账号
+        tapd_report_url: https://www.tapd.cn/33002756/prong/stories/stories_list
     product_managers:
-      - name: 产品A
-        tapd_user: product_a
+      - name: 雷艾琳
+        tapd_user: leiailin
 """
 
 
@@ -64,55 +65,41 @@ RAW_DATA = {
     "tasks": [
         {
             "workspace_id": "33002756",
-            "iteration_id": "sprint-1",
-            "owner": "zhangsan",
-            "status": "已完成",
-            "title": "完成日报页面",
+            "iteration_id": "1133002756001001828",
+            "owner": "leiailin",
+            "status": "done",
+            "title": "本地链路验证任务",
         },
         {
             "workspace_id": "33002756",
-            "iteration_id": "sprint-1",
-            "owner": "zhangsan",
-            "status": "开发中",
-            "title": "接入 TAPD API",
-        },
-        {
-            "workspace_id": "33002756",
-            "iteration_id": "sprint-1",
-            "owner": "lisi",
-            "status": "已关闭",
-            "title": "验证日报输出",
+            "iteration_id": "1133002756001001828",
+            "owner": "leiailin",
+            "status": "progressing",
+            "title": "TAPD 配置同步检查",
         },
     ],
     "bugs": [
         {
             "workspace_id": "33002756",
-            "iteration_id": "sprint-1",
-            "current_owner": "zhangsan",
-            "status": "已关闭",
+            "iteration_id": "1133002756001001828",
+            "current_owner": "leiailin;",
+            "status": "closed",
             "created": "2026-05-26 10:30:00",
         },
         {
             "workspace_id": "33002756",
-            "iteration_id": "sprint-1",
-            "current_owner": "zhangsan",
-            "status": "处理中",
+            "iteration_id": "1133002756001001828",
+            "current_owner": "leiailin;",
+            "status": "in_progress",
             "created": "2026-05-26 11:30:00",
-        },
-        {
-            "workspace_id": "33002756",
-            "iteration_id": "sprint-1",
-            "current_owner": "lisi",
-            "status": "处理中",
-            "created": "2026-05-25 18:30:00",
         },
     ],
     "stories": [
         {
             "workspace_id": "33002756",
-            "iteration_id": "sprint-1",
-            "owner": "product_a",
-            "title": "配置化日报范围",
+            "iteration_id": "1133002756001001828",
+            "owner": "leiailin",
+            "title": "真实配置同步范围",
             "status": "规划中",
             "start": "2026-05-25",
             "end": "2026-05-29",
@@ -142,25 +129,23 @@ class TapdDailyTests(unittest.TestCase):
         self.assertEqual(config["tapd"]["auth_mode"], "bearer")
         self.assertEqual(config["tapd"]["fields"]["bug_owner"], "current_owner")
         self.assertEqual(config["dingtalk"]["secret"], "SECxxxx")
-        self.assertEqual(config["projects"][0]["name"], "示例项目")
-        self.assertEqual(config["projects"][0]["iterations"][0]["iteration_id"], "sprint-1")
-        self.assertEqual(config["projects"][0]["members"][0]["tapd_user"], "zhangsan")
+        self.assertEqual(config["projects"][0]["name"], "Deepexi Foil")
+        self.assertEqual(config["projects"][0]["iterations"][0]["iteration_id"], "1133002756001001828")
+        self.assertEqual(config["projects"][0]["members"][0]["tapd_user"], "leiailin")
 
     def test_build_report_aggregates_tasks_bugs_and_stories_by_member(self):
         config = td.load_config_from_text(CONFIG_TEXT, env={})
         report = td.build_report(config, RAW_DATA, report_date="2026-05-26")
         iteration = report["projects"][0]["iterations"][0]
-        zhangsan = iteration["members"][0]
-        lisi = iteration["members"][1]
+        leiailin = iteration["members"][0]
 
-        self.assertEqual(zhangsan["task_total"], 2)
-        self.assertEqual(zhangsan["task_done"], 1)
-        self.assertEqual(zhangsan["task_completion_rate"], 50)
-        self.assertEqual(zhangsan["bugs_closed"], 1)
-        self.assertEqual(zhangsan["bugs_open"], 1)
-        self.assertEqual(zhangsan["bugs_new"], 2)
-        self.assertEqual(lisi["task_completion_rate"], 100)
-        self.assertEqual(iteration["requirements"][0]["title"], "配置化日报范围")
+        self.assertEqual(leiailin["task_total"], 2)
+        self.assertEqual(leiailin["task_done"], 1)
+        self.assertEqual(leiailin["task_completion_rate"], 50)
+        self.assertEqual(leiailin["bugs_closed"], 1)
+        self.assertEqual(leiailin["bugs_open"], 1)
+        self.assertEqual(leiailin["bugs_new"], 2)
+        self.assertEqual(iteration["requirements"][0]["title"], "真实配置同步范围")
 
     def test_build_report_accepts_tapd_wrapped_api_records(self):
         config = td.load_config_from_text(CONFIG_TEXT, env={})
@@ -169,8 +154,8 @@ class TapdDailyTests(unittest.TestCase):
                 {
                     "Task": {
                         "workspace_id": "33002756",
-                        "iteration_id": "sprint-1",
-                        "owner": "zhangsan",
+                        "iteration_id": "1133002756001001828",
+                        "owner": "leiailin",
                         "status": "done",
                     }
                 }
@@ -179,9 +164,9 @@ class TapdDailyTests(unittest.TestCase):
                 {
                     "Bug": {
                         "workspace_id": "33002756",
-                        "iteration_id": "sprint-1",
-                        "current_owner": "zhangsan",
-                        "status": "已关闭",
+                        "iteration_id": "1133002756001001828",
+                        "current_owner": "leiailin;",
+                        "status": "closed",
                         "created": "2026-05-26 10:30:00",
                     }
                 }
@@ -190,8 +175,8 @@ class TapdDailyTests(unittest.TestCase):
                 {
                     "Story": {
                         "workspace_id": "33002756",
-                        "iteration_id": "sprint-1",
-                        "owner": "product_a",
+                        "iteration_id": "1133002756001001828",
+                        "owner": "leiailin",
                         "name": "包装数据也能展示",
                         "status": "规划中",
                         "begin": "2026-05-26",
@@ -203,11 +188,11 @@ class TapdDailyTests(unittest.TestCase):
 
         report = td.build_report(config, wrapped_data, report_date="2026-05-26")
         iteration = report["projects"][0]["iterations"][0]
-        zhangsan = iteration["members"][0]
+        leiailin = iteration["members"][0]
 
-        self.assertEqual(zhangsan["task_total"], 1)
-        self.assertEqual(zhangsan["task_done"], 1)
-        self.assertEqual(zhangsan["bugs_closed"], 1)
+        self.assertEqual(leiailin["task_total"], 1)
+        self.assertEqual(leiailin["task_done"], 1)
+        self.assertEqual(leiailin["bugs_closed"], 1)
         self.assertEqual(iteration["requirements"][0]["title"], "包装数据也能展示")
 
     def test_render_markdown_contains_clear_daily_summary(self):
@@ -216,9 +201,9 @@ class TapdDailyTests(unittest.TestCase):
         markdown = td.render_markdown(report, "https://tapd-daily.internal.example.com/reports/2026-05-26/index.html")
 
         self.assertIn("### TAPD 每日复盘 2026-05-26", markdown)
-        self.assertIn("今日统计：1 个项目 / 1 个迭代 / 2 人", markdown)
-        self.assertIn("任务整体完成率：67%", markdown)
-        self.assertIn("缺陷：未解决 2，今日新增 2，今日关闭 1", markdown)
+        self.assertIn("今日统计：1 个项目 / 1 个迭代 / 1 人", markdown)
+        self.assertIn("任务整体完成率：50%", markdown)
+        self.assertIn("缺陷：未解决 1，今日新增 2，今日关闭 1", markdown)
 
     def test_write_report_outputs_html_markdown_and_json(self):
         config = td.load_config_from_text(CONFIG_TEXT, env={})
@@ -304,11 +289,11 @@ class TapdDailyTests(unittest.TestCase):
             def get_paginated(self, path, params=None):
                 self.paginated_calls.append((path, params or {}))
                 if path == "tasks":
-                    return [{"workspace_id": "33002756", "iteration_id": "sprint-1", "owner": "zhangsan", "status": "done"}]
+                    return [{"workspace_id": "33002756", "iteration_id": "1133002756001001828", "owner": "leiailin", "status": "done"}]
                 if path == "bugs":
-                    return [{"workspace_id": "33002756", "iteration_id": "sprint-1", "current_owner": "zhangsan", "status": "已关闭"}]
+                    return [{"workspace_id": "33002756", "iteration_id": "1133002756001001828", "current_owner": "leiailin;", "status": "closed"}]
                 if path == "stories":
-                    return [{"workspace_id": "33002756", "iteration_id": "sprint-1", "owner": "product_a", "name": "真实需求"}]
+                    return [{"workspace_id": "33002756", "iteration_id": "1133002756001001828", "owner": "leiailin", "name": "真实需求"}]
                 return []
 
         config = td.load_config_from_text(CONFIG_TEXT, env={})

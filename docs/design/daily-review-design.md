@@ -60,20 +60,14 @@ projects:
   - name: Deepexi Foil
     workspace_id: "33002756"
     iterations:
-      - name: 2026-05 Sprint
-        iteration_id: "123456"
+      - name: Deepexi Foil V1.0.0
+        iteration_id: "1133002756001001828"
     members:
-      - name: 张三
-        tapd_user: zhangsan
-        role: dev
-        tapd_report_url: https://tapd.cn/33002756/bugtrace/bugreports/stat_general/general/systemreport-1000000000000000001
-      - name: 李四
-        tapd_user: lisi
-        role: test
-        tapd_report_url: https://tapd.cn/33002756/bugtrace/bugreports/stat_general/general/systemreport-1000000000000000002
-    product_managers:
-      - name: 产品A
-        tapd_user: product_a
+      - name: 雷艾琳
+        tapd_user: leiailin
+        role: 当前账号
+        tapd_report_url: https://www.tapd.cn/33002756/prong/stories/stories_list
+    product_managers: []
 ```
 
 `.env` 保存敏感配置：
