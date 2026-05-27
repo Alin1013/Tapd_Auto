@@ -76,7 +76,6 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
 
             for member in project["members"]:
                 user = member["tapd_user"]
-                unique_users.add(user)
 
                 member_tasks = [
                     task
@@ -128,8 +127,11 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
                 fields["story_pm"],
                 status_labels.get("stories", {}),
             )
-            product_requirements = build_product_requirements(requirements, report_date)
-            if not iteration_has_daily_activity(iteration_summary, product_requirements):
+            product_requirements = build_product_requirements(requirements)
+            active_product_requirements = [
+                requirement for requirement in product_requirements if requirement_active_on_day(requirement, report_date)
+            ]
+            if not iteration_has_daily_activity(iteration_summary, active_product_requirements):
                 continue
 
             summary["task_total"] += iteration_task_total
@@ -199,12 +201,11 @@ def build_requirements(
     return sorted(requirements, key=lambda item: (item["start"], item["end"], item["title"]))
 
 
-def build_product_requirements(requirements: list[dict[str, Any]], report_date: str | None = None) -> list[dict[str, Any]]:
+def build_product_requirements(requirements: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         requirement
         for requirement in requirements
-        if requirement.get("product_manager_user") in HIDDEN_BUG_USERS or requirement.get("product_manager") in HIDDEN_BUG_NAMES
-        if report_date is None or requirement_active_on_day(requirement, report_date)
+        if not requirement_is_published(requirement)
     ]
 
 
@@ -261,6 +262,10 @@ def requirement_active_on_day(requirement: dict[str, Any], report_date: str) -> 
         if is_same_day(requirement.get(field_name), report_date):
             return True
     return date_range_includes(requirement.get("start"), requirement.get("end"), report_date)
+
+
+def requirement_is_published(requirement: dict[str, Any]) -> bool:
+    return str(requirement.get("status", "")).strip() in {"发布", "已发布", "status_21"}
 
 
 def date_range_includes(start: Any, end: Any, report_date: str) -> bool:

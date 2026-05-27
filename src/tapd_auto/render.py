@@ -297,14 +297,12 @@ def render_requirements(requirements: list[dict[str, Any]], empty_message: str =
   <td>{render_requirement_link(item)}</td>
   <td>{escape_html_value(item["product_manager"])}</td>
   <td>{escape_html_value(item["status"])}</td>
-  <td>{escape_html_value(item["start"])}</td>
-  <td>{escape_html_value(item["end"])}</td>
 </tr>"""
         for item in requirements
     )
     return f"""<div class="table-wrap">
   <table class="requirement-table">
-    <thead><tr><th>需求</th><th>产品经理</th><th>状态</th><th>开始</th><th>结束</th></tr></thead>
+    <thead><tr><th>需求</th><th>产品经理</th><th>状态</th></tr></thead>
     <tbody>{rows}</tbody>
   </table>
 </div>"""
@@ -313,12 +311,10 @@ def render_requirements(requirements: list[dict[str, Any]], empty_message: str =
 def iteration_product_requirements(iteration: dict[str, Any]) -> list[dict[str, Any]]:
     if "product_requirements" in iteration:
         return list(iteration["product_requirements"])
-    product_users = {"Tora", "nianqiongyue"}
-    product_names = {"黄寅子", "粘琼月"}
     return [
         requirement
         for requirement in iteration.get("requirements", [])
-        if requirement.get("product_manager_user") in product_users or requirement.get("product_manager") in product_names
+        if str(requirement.get("status", "")).strip() not in {"发布", "已发布", "status_21"}
     ]
 
 
@@ -501,7 +497,7 @@ def draw_png_requirements(
 
     for requirement in requirements[:8]:
         title = truncate_text(requirement["title"], 32)
-        line = f"{title}｜{requirement['product_manager']}｜{requirement['status']}｜{requirement['start']} - {requirement['end']}"
+        line = f"{title}｜{requirement['product_manager']}｜{requirement['status']}"
         draw.text((x, y), line, fill="#475569", font=small_font)
         y += 30
     if len(requirements) > 8:
