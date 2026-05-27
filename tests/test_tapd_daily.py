@@ -89,6 +89,7 @@ RAW_DATA = {
             "current_owner": "leiailin;",
             "status": "closed",
             "created": "2026-05-26 10:30:00",
+            "closed": "2026-05-26 16:30:00",
         },
         {
             "workspace_id": "33002756",
@@ -172,6 +173,7 @@ class TapdDailyTests(unittest.TestCase):
                         "current_owner": "leiailin;",
                         "status": "closed",
                         "created": "2026-05-26 10:30:00",
+                        "closed": "2026-05-26 16:30:00",
                     }
                 }
             ],
@@ -231,6 +233,91 @@ class TapdDailyTests(unittest.TestCase):
 
         self.assertTrue(leiailin.get("hide_bug_metrics"))
 
+    def test_build_report_uses_today_window_for_bug_metrics(self):
+        config = td.load_config_from_text(CONFIG_TEXT, env={})
+        raw_data = {
+            "tasks": [],
+            "bugs": [
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001828",
+                    "current_owner": "leiailin",
+                    "status": "in_progress",
+                    "created": "2026-05-20 09:00:00",
+                },
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001828",
+                    "current_owner": "leiailin",
+                    "status": "closed",
+                    "created": "2026-05-26 09:30:00",
+                    "closed": "2026-05-27 10:00:00",
+                },
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001828",
+                    "current_owner": "leiailin",
+                    "status": "closed",
+                    "created": "2026-05-25 09:30:00",
+                    "closed": "2026-05-26 18:30:00",
+                },
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001828",
+                    "current_owner": "leiailin",
+                    "status": "closed",
+                    "created": "2026-05-25 09:30:00",
+                    "closed": "2026-05-25 18:30:00",
+                },
+            ],
+            "stories": [],
+        }
+
+        report = td.build_report(config, raw_data, report_date="2026-05-26")
+        leiailin = report["projects"][0]["iterations"][0]["members"][0]
+
+        self.assertEqual(leiailin["bugs_open"], 1)
+        self.assertEqual(leiailin["bugs_new"], 1)
+        self.assertEqual(leiailin["bugs_closed"], 1)
+        self.assertEqual(report["summary"]["bugs_open"], 1)
+        self.assertEqual(report["summary"]["bugs_new"], 1)
+        self.assertEqual(report["summary"]["bugs_closed"], 1)
+
+    def test_build_report_excludes_hidden_bug_members_from_defect_summary(self):
+        config_text = CONFIG_TEXT.replace(
+            "      - name: 雷艾琳\n        tapd_user: leiailin\n        role: 当前账号",
+            "      - name: 雷艾琳\n        tapd_user: leiailin\n        role: 当前账号\n"
+            "      - name: 黄寅子\n        tapd_user: Tora\n        role: 团队成员\n        hide_bug_metrics: true",
+        )
+        config = td.load_config_from_text(config_text, env={})
+        raw_data = {
+            "tasks": [],
+            "bugs": [
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001828",
+                    "current_owner": "leiailin",
+                    "status": "in_progress",
+                    "created": "2026-05-26 09:00:00",
+                },
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001828",
+                    "current_owner": "Tora",
+                    "status": "in_progress",
+                    "created": "2026-05-26 10:00:00",
+                },
+            ],
+            "stories": [],
+        }
+
+        report = td.build_report(config, raw_data, report_date="2026-05-26")
+
+        self.assertEqual(report["summary"]["bugs_open"], 1)
+        self.assertEqual(report["summary"]["bugs_new"], 1)
+        self.assertEqual(report["projects"][0]["iterations"][0]["summary"]["bugs_open"], 1)
+        self.assertEqual(report["projects"][0]["iterations"][0]["summary"]["bugs_new"], 1)
+
     def test_render_markdown_contains_clear_daily_summary(self):
         config = td.load_config_from_text(CONFIG_TEXT, env={})
         report = td.build_report(config, RAW_DATA, report_date="2026-05-26")
@@ -239,23 +326,25 @@ class TapdDailyTests(unittest.TestCase):
         self.assertIn("### TAPD 每日复盘 2026-05-26", markdown)
         self.assertIn("今日统计：1 个项目 / 1 个迭代 / 1 人", markdown)
         self.assertNotIn("任务整体完成率", markdown)
-        self.assertIn("缺陷：未解决 1，今日新增 2，今日关闭 1", markdown)
+        self.assertIn("今日缺陷：未解决 1，今日新增 2，当日关闭 1", markdown)
 
     def test_render_html_contains_team_defect_table(self):
         config = td.load_config_from_text(CONFIG_TEXT, env={})
         report = td.build_report(config, RAW_DATA, report_date="2026-05-26")
         html = td.render_html(report)
 
-        self.assertIn("团队缺陷", html)
+        self.assertIn("今日缺陷", html)
         self.assertIn('class="member-table"', html)
         self.assertIn("<th>成员</th>", html)
-        self.assertIn("<th>缺陷</th>", html)
+        self.assertIn("<th>今日缺陷</th>", html)
         self.assertNotIn("<th>任务</th>", html)
         self.assertNotIn("<th>完成率</th>", html)
         self.assertNotIn("任务总数", html)
         self.assertNotIn("任务完成率", html)
         self.assertIn("雷艾琳", html)
         self.assertIn("真实配置同步范围", html)
+        self.assertNotIn("workspace_id:", html)
+        self.assertNotIn("iteration_id:", html)
 
     def test_render_html_hides_bug_metrics_for_configured_members(self):
         report = {
@@ -332,14 +421,121 @@ class TapdDailyTests(unittest.TestCase):
         self.assertIn("雷艾琳", html)
         self.assertIn("未解 1", html)
         self.assertIn("新增 2", html)
-        self.assertIn("已关 3", html)
-        self.assertIn("黄寅子", html)
-        self.assertIn("粘琼月", html)
-        self.assertIn("缺陷不展示", html)
+        self.assertIn("当日关闭 3", html)
+        self.assertNotIn("缺陷不展示", html)
         self.assertNotIn("未解 22", html)
         self.assertNotIn("未解 33", html)
         self.assertNotIn("8/8", html)
         self.assertNotIn("任务 4/8", html)
+
+    def test_render_html_adds_requirement_tabs_for_tora_and_nianqiongyue(self):
+        report = {
+            "date": "2026-05-26",
+            "timezone": "Asia/Shanghai",
+            "summary": {
+                "project_count": 1,
+                "iteration_count": 1,
+                "member_count": 3,
+                "task_total": 0,
+                "task_done": 0,
+                "task_completion_rate": 0,
+                "bugs_closed": 0,
+                "bugs_open": 1,
+                "bugs_new": 1,
+            },
+            "projects": [
+                {
+                    "name": "Deepexi Foil",
+                    "workspace_id": "33002756",
+                    "iterations": [
+                        {
+                            "name": "Deepexi Foil V1.0.0",
+                            "iteration_id": "1133002756001001828",
+                            "summary": {"member_count": 1, "bugs_open": 1, "bugs_new": 1, "bugs_closed": 0},
+                            "requirements": [
+                                {
+                                    "title": "Tora 需求内容",
+                                    "product_manager": "黄寅子",
+                                    "product_manager_user": "Tora",
+                                    "status": "已提测",
+                                    "start": "2026-05-25",
+                                    "end": "2026-05-29",
+                                    "url": "",
+                                },
+                                {
+                                    "title": "粘琼月需求内容",
+                                    "product_manager": "粘琼月",
+                                    "product_manager_user": "nianqiongyue",
+                                    "status": "开发实现",
+                                    "start": "2026-05-26",
+                                    "end": "2026-05-30",
+                                    "url": "",
+                                },
+                                {
+                                    "title": "其他需求内容",
+                                    "product_manager": "雷艾琳",
+                                    "product_manager_user": "leiailin",
+                                    "status": "规划中",
+                                    "start": "2026-05-26",
+                                    "end": "2026-05-30",
+                                    "url": "",
+                                },
+                            ],
+                            "members": [
+                                {
+                                    "name": "雷艾琳",
+                                    "tapd_user": "leiailin",
+                                    "role": "当前账号",
+                                    "tapd_report_url": "",
+                                    "task_total": 0,
+                                    "task_done": 0,
+                                    "task_completion_rate": 0,
+                                    "bugs_closed": 0,
+                                    "bugs_open": 1,
+                                    "bugs_new": 1,
+                                },
+                                {
+                                    "name": "黄寅子",
+                                    "tapd_user": "Tora",
+                                    "role": "团队成员",
+                                    "tapd_report_url": "",
+                                    "hide_bug_metrics": True,
+                                    "task_total": 0,
+                                    "task_done": 0,
+                                    "task_completion_rate": 0,
+                                    "bugs_closed": 0,
+                                    "bugs_open": 22,
+                                    "bugs_new": 11,
+                                },
+                                {
+                                    "name": "粘琼月",
+                                    "tapd_user": "nianqiongyue",
+                                    "role": "团队成员",
+                                    "tapd_report_url": "",
+                                    "hide_bug_metrics": True,
+                                    "task_total": 0,
+                                    "task_done": 0,
+                                    "task_completion_rate": 0,
+                                    "bugs_closed": 0,
+                                    "bugs_open": 33,
+                                    "bugs_new": 12,
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+
+        html = td.render_html(report)
+
+        self.assertIn("今日缺陷", html)
+        self.assertIn("Tora 需求", html)
+        self.assertIn("粘琼月需求", html)
+        self.assertIn("Tora 需求内容", html)
+        self.assertIn("粘琼月需求内容", html)
+        self.assertNotIn("未解 22", html)
+        self.assertNotIn("未解 33", html)
 
     def test_render_html_handles_empty_requirement_dates(self):
         config = td.load_config_from_text(CONFIG_TEXT, env={})

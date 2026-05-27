@@ -132,7 +132,7 @@ GET /tasks?workspace_id={workspace_id}&iteration_id={iteration_id}&owner={tapd_u
 
 ## 五、TAPD 缺陷接口
 
-用途：统计每个人已关闭、未解决、今日新增缺陷数。
+用途：统计每个人未解决、今日新增、当日关闭缺陷数。
 
 ```http
 GET https://api.tapd.cn/bugs
@@ -150,6 +150,12 @@ GET /bugs?workspace_id={workspace_id}&iteration_id={iteration_id}&current_owner=
 
 ```http
 created=2026-05-26 00:00:00~2026-05-26 23:59:59
+```
+
+当日关闭按 `closed`、`resolved` 或 `completed` 落在当天统计：
+
+```http
+closed=2026-05-26 00:00:00~2026-05-26 23:59:59
 ```
 
 常用参数：
@@ -171,21 +177,21 @@ created=2026-05-26 00:00:00~2026-05-26 23:59:59
 - 第一版缺陷归属字段固定用 `current_owner`，含义是缺陷当前处理人，也就是“现在这条缺陷在谁手上”。
 - `current_owner == tapd_user` 用于人员维度聚合，适合日报里展示每个人当前缺陷压力、待处理缺陷和负责推进的缺陷。
 - 未解决缺陷：`current_owner == tapd_user` 且 `status not in bug_closed_statuses`。
-- 已关闭缺陷：`current_owner == tapd_user` 且 `status in bug_closed_statuses`。这个指标表示“当前/最后归属在此人的已关闭缺陷”，不等同于“由此人关闭的缺陷”。
-- 今日新增缺陷：第一版仍按 `current_owner == tapd_user` 且 `created` 落在当天统计，含义是“今天新增后当前分配给此人的缺陷”。如果后续想统计“谁提的缺陷”，要改用 `reporter`；如果想统计“谁解决/关闭的缺陷”，要看工作区是否有解决人、关闭人或流程自定义字段。
+- 今日新增缺陷：`current_owner == tapd_user` 且 `created` 落在当天；即使当天已经解决或关闭，也仍计入今日新增。
+- 当日关闭缺陷：`current_owner == tapd_user`、`status in bug_closed_statuses`，且 `closed`、`resolved` 或 `completed` 任一字段落在当天。这个指标表示“当前/最后归属在此人的当日关闭缺陷”，不等同于“由此人关闭的缺陷”。
 - 单个缺陷如果 `current_owner` 支持多人或返回多人字符串，需要按 TAPD 实际返回格式拆分后归属到多个人；否则只归属给单人。
 - `current_owner` 为空或不在配置成员表里时，不丢弃数据，归入“未分配/未配置人员”汇总，并在日报异常提示里列出数量。
 - 如果测试团队实际要按开发人员、测试人员、参与人或自定义字段看责任，需要通过 `/bugs/get_fields_info?workspace_id=...&all_options=1` 确认字段名，再把 `fields.bug_owner` 从 `current_owner` 改成对应字段。
 - 缺陷状态是项目级动态字段，必须用 `/bugs/get_fields_info?workspace_id=...&all_options=1` 拉状态候选值。
 - 第一版关闭类状态建议默认配置为：`已解决`、`已关闭`、`无需解决`，但最终以实际工作区状态为准。
-- 未解决 = 总缺陷 - 已关闭缺陷。
-- 今日新增时间范围 = `Asia/Shanghai` 当天 00:00:00 到 23:59:59。
+- 未解决 = 当前状态不在关闭状态映射中的缺陷。
+- 今日新增和当日关闭时间范围 = `Asia/Shanghai` 当天 00:00:00 到 23:59:59。
 
 ### 缺陷归属字段选择说明
 
 | 字段 | 适合回答的问题 | 优点 | 风险 |
 | --- | --- | --- | --- |
-| `current_owner` | 现在谁要处理这些缺陷 | 最适合日报压力和待办视角；随流程流转自动变化 | 已关闭数代表最后/当前归属，不一定代表关闭动作人 |
+| `current_owner` | 现在谁要处理这些缺陷 | 最适合日报压力和待办视角；随流程流转自动变化 | 当日关闭数代表最后/当前归属，不一定代表关闭动作人 |
 | `reporter` | 谁提了这些缺陷 | 适合测试产出、缺陷发现量 | 不代表谁负责解决 |
 | `participator` | 谁参与过这些缺陷 | 适合追踪协作范围 | 容易多人重复计数 |
 | 开发/测试/自定义字段 | 组织内部定义的责任人 | 可贴合团队真实责任口径 | 需要先用字段发现接口确认字段名和候选值 |
@@ -384,8 +390,8 @@ Notifier
 | 任务总数 | `/tasks` | 保留采集能力，当前日报不展示 |
 | 完成任务数 | `/tasks` | 保留采集能力，当前日报不展示 |
 | 缺陷总数 | `/bugs` | 按 `current_owner` 聚合 |
-| 缺陷已关闭 | `/bugs` | `status in bug_closed_statuses` |
-| 缺陷未解决 | `/bugs` | 总数 - 已关闭 |
+| 缺陷当日关闭 | `/bugs` | `status in bug_closed_statuses` 且 `closed/resolved/completed` 当天 |
+| 缺陷未解决 | `/bugs` | `status not in bug_closed_statuses` |
 | 今日新增缺陷 | `/bugs` | `created` 当天 |
 | 需求标题 | `/stories` | `name` |
 | 产品经理 | `/stories` | `owner` |

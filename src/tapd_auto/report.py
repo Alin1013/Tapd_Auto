@@ -26,6 +26,8 @@ DEFAULT_TAPD_FIELDS = {
     "bug_owner": "current_owner",
     "story_pm": "owner",
 }
+HIDDEN_BUG_USERS = {"Tora", "nianqiongyue"}
+HIDDEN_BUG_NAMES = {"黄寅子", "粘琼月"}
 
 
 def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]]], report_date: str) -> dict[str, Any]:
@@ -64,6 +66,12 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
         for iteration in project["iterations"]:
             summary["iteration_count"] += 1
             member_results = []
+            iteration_summary = {
+                "member_count": 0,
+                "bugs_closed": 0,
+                "bugs_open": 0,
+                "bugs_new": 0,
+            }
 
             for member in project["members"]:
                 user = member["tapd_user"]
@@ -82,15 +90,21 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
 
                 task_total = len(member_tasks)
                 task_done = sum(1 for task in member_tasks if str(task.get("status", "")) in done_task_statuses)
-                bugs_closed = sum(1 for bug in member_bugs if str(bug.get("status", "")) in closed_bug_statuses)
-                bugs_open = len(member_bugs) - bugs_closed
+                bugs_closed = sum(1 for bug in member_bugs if bug_closed_on_day(bug, closed_bug_statuses, report_date))
+                bugs_open = sum(1 for bug in member_bugs if str(bug.get("status", "")) not in closed_bug_statuses)
                 bugs_new = sum(1 for bug in member_bugs if is_same_day(bug.get("created"), report_date))
+                hide_bug_metrics = member_hides_bug_metrics(member)
 
                 summary["task_total"] += task_total
                 summary["task_done"] += task_done
-                summary["bugs_closed"] += bugs_closed
-                summary["bugs_open"] += bugs_open
-                summary["bugs_new"] += bugs_new
+                if not hide_bug_metrics:
+                    summary["bugs_closed"] += bugs_closed
+                    summary["bugs_open"] += bugs_open
+                    summary["bugs_new"] += bugs_new
+                    iteration_summary["member_count"] += 1
+                    iteration_summary["bugs_closed"] += bugs_closed
+                    iteration_summary["bugs_open"] += bugs_open
+                    iteration_summary["bugs_new"] += bugs_new
 
                 member_results.append(
                     {
@@ -98,7 +112,7 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
                         "tapd_user": user,
                         "role": member.get("role", ""),
                         "tapd_report_url": member.get("tapd_report_url", ""),
-                        "hide_bug_metrics": bool(member.get("hide_bug_metrics", False)),
+                        "hide_bug_metrics": hide_bug_metrics,
                         "task_total": task_total,
                         "task_done": task_done,
                         "task_completion_rate": percent(task_done, task_total),
@@ -120,6 +134,7 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
                 {
                     "name": iteration["name"],
                     "iteration_id": str(iteration["iteration_id"]),
+                    "summary": iteration_summary,
                     "members": member_results,
                     "requirements": requirements,
                 }
@@ -159,6 +174,7 @@ def build_requirements(
             {
                 "title": story.get("title") or story.get("name", ""),
                 "product_manager": product_managers.get(matched_user, matched_user),
+                "product_manager_user": matched_user,
                 "status": status_labels.get(raw_status, raw_status),
                 "start": story.get("start") or story.get("begin", ""),
                 "end": story.get("end") or story.get("due", ""),
@@ -197,6 +213,19 @@ def get_tapd_rules(config: dict[str, Any]) -> dict[str, Any]:
         "fields": {**DEFAULT_TAPD_FIELDS, **tapd.get("fields", {})},
         "status_labels": tapd.get("status_labels", {}),
     }
+
+
+def member_hides_bug_metrics(member: dict[str, Any]) -> bool:
+    return bool(member.get("hide_bug_metrics")) or member.get("tapd_user") in HIDDEN_BUG_USERS or member.get("name") in HIDDEN_BUG_NAMES
+
+
+def bug_closed_on_day(bug: dict[str, Any], closed_statuses: set[str], report_date: str) -> bool:
+    if str(bug.get("status", "")) not in closed_statuses:
+        return False
+    for field_name in ["closed", "resolved", "completed"]:
+        if is_same_day(bug.get(field_name), report_date):
+            return True
+    return False
 
 
 def field_matches(item: dict[str, Any], field_name: str, user: str) -> bool:

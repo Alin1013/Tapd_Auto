@@ -61,7 +61,8 @@
 - `configs/config.example.yaml` 保留真实项目、真实团队成员和脱敏 dry-run 数据。
 - TAPD token 只放 `.env` 的 `TAPD_ACCESS_TOKEN`，不得写入文档、配置示例、测试或报表源码。
 - 团队成员日报只展示缺陷口径，不展示任务数、任务完成率或任务进展。
-- 缺陷口径默认展示未解决、今日新增、今日关闭；`Tora`（黄寅子）和 `nianqiongyue`（粘琼月）配置为 `hide_bug_metrics: true`，页面显示“缺陷不展示”。
+- 缺陷口径默认展示未解决、今日新增、当日关闭；今日新增按当天 `created` 统计，即使当天已解决也计入；当日关闭按当天 `closed`、`resolved` 或 `completed` 统计。
+- `Tora`（黄寅子）和 `nianqiongyue`（粘琼月）配置为 `hide_bug_metrics: true`，不进入缺陷成员表，页面改为独立需求标签页展示需求内容。
 - 需求 owner 先按同一团队名单筛选，后续可单独拆产品经理配置。
 - 钉钉 webhook 和手机号后续再补充。
 - 当前项目任务状态：`open` 未开始、`progressing` 进行中、`done` 已完成。

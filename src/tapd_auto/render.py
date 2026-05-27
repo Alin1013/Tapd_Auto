@@ -24,7 +24,7 @@ def render_markdown(report: dict[str, Any], report_url: str, image_urls: list[st
         f"### TAPD 每日复盘 {report['date']}",
         "",
         f"今日统计：{summary['project_count']} 个项目 / {summary['iteration_count']} 个迭代 / {summary['member_count']} 人",
-        f"缺陷：未解决 {summary['bugs_open']}，今日新增 {summary['bugs_new']}，今日关闭 {summary['bugs_closed']}",
+        f"今日缺陷：未解决 {summary['bugs_open']}，今日新增 {summary['bugs_new']}，当日关闭 {summary['bugs_closed']}",
         "",
     ]
     for image_url in image_urls or []:
@@ -83,7 +83,16 @@ def render_html(report: dict[str, Any]) -> str:
     section {{ padding: 18px; margin-top: 16px; }}
     .project-head, .iteration-head, .panel-head {{ display: flex; justify-content: space-between; gap: 14px; align-items: center; }}
     .iteration {{ margin-top: 18px; padding-top: 16px; border-top: 1px solid #e6ebf1; }}
-    .work-grid {{ display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr); gap: 14px; margin-top: 14px; align-items: start; }}
+    .tabs {{ margin-top: 14px; }}
+    .tab-list {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }}
+    .tab-button {{ border: 1px solid #ccd6e0; background: #fff; color: #334155; border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }}
+    .tab-button.is-active {{ color: #0f4f8f; background: #eef5ff; border-color: #b9d7ff; }}
+    .tab-panel {{ display: none; }}
+    .tab-panel.is-active {{ display: block; }}
+    .tab-metrics {{ display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 10px; margin: 10px 0 12px; }}
+    .mini-metric {{ background: #f8fafc; border: 1px solid #e0e7ef; border-radius: 8px; padding: 10px 12px; }}
+    .mini-metric span {{ display: block; color: #667085; font-size: 12px; }}
+    .mini-metric strong {{ display: block; color: #111827; font-size: 20px; margin-top: 4px; }}
     .panel {{ padding: 14px; overflow: hidden; }}
     .table-wrap {{ overflow-x: auto; margin-top: 10px; }}
     table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
@@ -100,8 +109,8 @@ def render_html(report: dict[str, Any]) -> str:
     .empty {{ margin: 12px 0 0; padding: 14px; border: 1px dashed #ccd6e0; border-radius: 8px; color: #667085; background: #fbfcfd; }}
     a {{ color: #1769c2; text-decoration: none; }}
     a:hover {{ text-decoration: underline; }}
-    @media (max-width: 920px) {{ .summary {{ grid-template-columns: repeat(3, 1fr); }} .work-grid {{ grid-template-columns: 1fr; }} header {{ align-items: flex-start; flex-direction: column; }} }}
-    @media (max-width: 560px) {{ main {{ padding: 20px 12px; }} .summary {{ grid-template-columns: repeat(2, 1fr); }} .project-head, .iteration-head, .panel-head {{ align-items: flex-start; flex-direction: column; }} th, td {{ padding: 9px 8px; }} }}
+    @media (max-width: 920px) {{ .summary {{ grid-template-columns: repeat(3, 1fr); }} .tab-metrics {{ grid-template-columns: repeat(2, 1fr); }} header {{ align-items: flex-start; flex-direction: column; }} }}
+    @media (max-width: 560px) {{ main {{ padding: 20px 12px; }} .summary {{ grid-template-columns: repeat(2, 1fr); }} .tab-metrics {{ grid-template-columns: 1fr; }} .project-head, .iteration-head, .panel-head {{ align-items: flex-start; flex-direction: column; }} th, td {{ padding: 9px 8px; }} }}
   </style>
 </head>
 <body>
@@ -116,6 +125,18 @@ def render_html(report: dict[str, Any]) -> str:
   <div class="summary">{summary_metrics}</div>
   {project_sections}
 </main>
+<script>
+  document.querySelectorAll("[data-tab-target]").forEach((button) => {{
+    button.addEventListener("click", () => {{
+      const group = button.closest(".tabs");
+      group.querySelectorAll("[data-tab-target]").forEach((item) => item.classList.remove("is-active"));
+      group.querySelectorAll(".tab-panel").forEach((item) => item.classList.remove("is-active"));
+      button.classList.add("is-active");
+      const panel = group.querySelector(button.dataset.tabTarget);
+      if (panel) panel.classList.add("is-active");
+    }});
+  }});
+</script>
 </body>
 </html>
 """
@@ -128,7 +149,7 @@ def render_html_summary_metrics(summary: dict[str, Any]) -> str:
         ("人员", summary["member_count"]),
         ("未解决缺陷", summary["bugs_open"]),
         ("今日新增缺陷", summary["bugs_new"]),
-        ("今日关闭缺陷", summary["bugs_closed"]),
+        ("当日关闭缺陷", summary["bugs_closed"]),
     ]
     return "\n".join(f"""<div class="metric"><span>{html.escape(str(label))}</span><strong>{html.escape(str(value))}</strong></div>""" for label, value in metrics)
 
@@ -138,31 +159,84 @@ def render_project(project: dict[str, Any]) -> str:
     return f"""<section>
   <div class="project-head">
     <h2>{html.escape(project["name"])}</h2>
-    <div class="subtle">workspace_id: {html.escape(project["workspace_id"])}</div>
   </div>
   {iterations}
 </section>"""
 
 
 def render_iteration(iteration: dict[str, Any]) -> str:
-    member_table = render_member_table(iteration["members"])
-    requirements = render_requirements(iteration["requirements"])
+    tabs = render_iteration_tabs(iteration)
     return f"""<div class="iteration">
   <div class="iteration-head">
     <h3>{html.escape(iteration["name"])}</h3>
-    <div class="subtle">iteration_id: {html.escape(iteration["iteration_id"])}</div>
   </div>
-  <div class="work-grid">
-    <div class="panel">
-      <div class="panel-head"><h4>团队缺陷</h4><div class="subtle">{len(iteration["members"])} 人</div></div>
-      {member_table}
-    </div>
-    <div class="panel">
-      <div class="panel-head"><h4>需求排期</h4><div class="subtle">{len(iteration["requirements"])} 条</div></div>
-      {requirements}
-    </div>
-  </div>
+  {tabs}
 </div>"""
+
+
+def render_iteration_tabs(iteration: dict[str, Any]) -> str:
+    tab_id = safe_dom_id(iteration["iteration_id"])
+    visible_members = [member for member in iteration["members"] if not member_bug_metrics_hidden(member)]
+    hidden_members = [member for member in iteration["members"] if member_bug_metrics_hidden(member)]
+    panels = [
+        (
+            "defects",
+            "今日缺陷",
+            render_defect_panel(visible_members, iteration.get("summary")),
+        ),
+        (
+            "requirements",
+            "需求排期",
+            render_requirements(iteration["requirements"]),
+        ),
+    ]
+    for member in hidden_members:
+        label = requirement_tab_label(member)
+        member_requirements = requirements_for_member(iteration["requirements"], member)
+        panels.append((f"requirements-{safe_dom_id(member['tapd_user'])}", label, render_requirements(member_requirements)))
+
+    buttons = []
+    contents = []
+    for index, (panel_key, label, content) in enumerate(panels):
+        panel_id = f"tab-{tab_id}-{panel_key}"
+        active_class = " is-active" if index == 0 else ""
+        buttons.append(
+            f'<button type="button" class="tab-button{active_class}" data-tab-target="#{panel_id}">{html.escape(label)}</button>'
+        )
+        contents.append(f'<div id="{panel_id}" class="tab-panel{active_class}">{content}</div>')
+
+    return f"""<div class="tabs">
+  <div class="tab-list">{"".join(buttons)}</div>
+  {"".join(contents)}
+</div>"""
+
+
+def render_defect_panel(members: list[dict[str, Any]], summary: dict[str, Any] | None = None) -> str:
+    summary = summary or summarize_visible_members(members)
+    metrics = [
+        ("当前成员", summary["member_count"]),
+        ("未解决", summary["bugs_open"]),
+        ("今日新增", summary["bugs_new"]),
+        ("当日关闭", summary["bugs_closed"]),
+    ]
+    metric_cards = "\n".join(
+        f"""<div class="mini-metric"><span>{html.escape(str(label))}</span><strong>{html.escape(str(value))}</strong></div>"""
+        for label, value in metrics
+    )
+    return f"""<div class="panel">
+  <div class="panel-head"><h4>今日缺陷</h4><div class="subtle">按当天时间统计</div></div>
+  <div class="tab-metrics">{metric_cards}</div>
+  {render_member_table(members)}
+</div>"""
+
+
+def summarize_visible_members(members: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        "member_count": len(members),
+        "bugs_open": sum(int(member["bugs_open"]) for member in members),
+        "bugs_new": sum(int(member["bugs_new"]) for member in members),
+        "bugs_closed": sum(int(member["bugs_closed"]) for member in members),
+    }
 
 
 def render_member_table(members: list[dict[str, Any]]) -> str:
@@ -181,7 +255,7 @@ def render_member_table(members: list[dict[str, Any]]) -> str:
     rows = "\n".join(render_member_row(member) for member in ordered_members)
     return f"""<div class="table-wrap">
   <table class="member-table">
-    <thead><tr><th>成员</th><th>缺陷</th></tr></thead>
+    <thead><tr><th>成员</th><th>今日缺陷</th></tr></thead>
     <tbody>{rows}</tbody>
   </table>
 </div>"""
@@ -201,11 +275,11 @@ def render_member_row(member: dict[str, Any]) -> str:
 
 def render_member_bug_metrics(member: dict[str, Any]) -> str:
     if member_bug_metrics_hidden(member):
-        return '<span class="pill pill-muted">缺陷不展示</span>'
+        return ""
     return (
         f'<span class="pill pill-warn">未解 {member["bugs_open"]}</span>'
         f'<span class="pill pill-info">新增 {member["bugs_new"]}</span>'
-        f'<span class="pill pill-ok">已关 {member["bugs_closed"]}</span>'
+        f'<span class="pill pill-ok">当日关闭 {member["bugs_closed"]}</span>'
     )
 
 
@@ -234,6 +308,26 @@ def render_requirements(requirements: list[dict[str, Any]]) -> str:
     <tbody>{rows}</tbody>
   </table>
 </div>"""
+
+
+def requirements_for_member(requirements: list[dict[str, Any]], member: dict[str, Any]) -> list[dict[str, Any]]:
+    user = member.get("tapd_user")
+    name = member.get("name")
+    return [
+        requirement
+        for requirement in requirements
+        if requirement.get("product_manager_user") == user or requirement.get("product_manager") == name
+    ]
+
+
+def requirement_tab_label(member: dict[str, Any]) -> str:
+    if member.get("tapd_user") == "Tora":
+        return "Tora 需求"
+    return f"{member.get('name', member.get('tapd_user', '成员'))}需求"
+
+
+def safe_dom_id(value: Any) -> str:
+    return "".join(ch if str(ch).isalnum() else "-" for ch in str(value)).strip("-") or "panel"
 
 
 def render_requirement_link(item: dict[str, Any]) -> str:
@@ -321,7 +415,7 @@ def draw_png_summary_metrics(
         ("人员", summary["member_count"]),
         ("未解决缺陷", summary["bugs_open"]),
         ("今日新增缺陷", summary["bugs_new"]),
-        ("今日关闭缺陷", summary["bugs_closed"]),
+        ("当日关闭缺陷", summary["bugs_closed"]),
     ]
     gap = 12
     card_width = (width - gap * (len(metrics) - 1)) // len(metrics)
@@ -342,10 +436,10 @@ def draw_png_members(
     body_font: ImageFont.ImageFont,
     small_font: ImageFont.ImageFont,
 ) -> int:
+    members = [member for member in members if not member_bug_metrics_hidden(member)]
     ordered_members = sorted(
         members,
         key=lambda member: (
-            member_bug_metrics_hidden(member),
             -int(member["bugs_open"]),
             -int(member["bugs_new"]),
             -int(member["bugs_closed"]),
@@ -363,11 +457,8 @@ def draw_png_members(
         right = left + cell_width - 10
         draw.rounded_rectangle((left, top + 4, right, top + 96), radius=8, fill="#f8fafc", outline="#dfe5ee")
         draw.text((left + 10, top + 16), member["name"], fill="#172033", font=body_font)
-        if member_bug_metrics_hidden(member):
-            draw.text((left + 10, top + 52), "缺陷不展示", fill="#64748b", font=small_font)
-            continue
         draw.text((left + 10, top + 48), f"未解 {member['bugs_open']} / 新增 {member['bugs_new']}", fill="#a23b26", font=small_font)
-        draw.text((left + 10, top + 72), f"已关 {member['bugs_closed']}", fill="#176b43", font=small_font)
+        draw.text((left + 10, top + 72), f"当日关闭 {member['bugs_closed']}", fill="#176b43", font=small_font)
     rows = max(1, (len(ordered_members) + columns - 1) // columns)
     return y + rows * row_height
 

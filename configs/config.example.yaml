@@ -163,6 +163,7 @@ sample_data:
       current_owner: leiailin
       status: closed
       created: "2026-05-26 10:30:00"
+      closed: "2026-05-26 16:30:00"
     - workspace_id: "33002756"
       iteration_id: "1133002756001001828"
       current_owner: xiaowenyang
