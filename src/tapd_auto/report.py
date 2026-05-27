@@ -98,6 +98,7 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
                         "tapd_user": user,
                         "role": member.get("role", ""),
                         "tapd_report_url": member.get("tapd_report_url", ""),
+                        "hide_bug_metrics": bool(member.get("hide_bug_metrics", False)),
                         "task_total": task_total,
                         "task_done": task_done,
                         "task_completion_rate": percent(task_done, task_total),

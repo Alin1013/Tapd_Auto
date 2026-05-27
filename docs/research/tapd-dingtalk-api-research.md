@@ -90,7 +90,7 @@ id,name,workspace_id,startdate,enddate,status,created,modified,completed
 
 ## 四、TAPD 任务接口
 
-用途：统计每个人任务总数、完成数、未完成数。
+用途：保留任务接口采集和字段发现能力，当前日报不展示任务数、完成数或进展。
 
 ```http
 GET https://api.tapd.cn/tasks
@@ -381,8 +381,8 @@ Notifier
 | 迭代名称 | `/iterations` | `name` |
 | 迭代起止 | `/iterations` | `startdate` / `enddate` |
 | 成员 | 配置 | `tapd_user` |
-| 任务总数 | `/tasks` | 按 `owner` 聚合 |
-| 完成任务数 | `/tasks` | `status in task_done_statuses` |
+| 任务总数 | `/tasks` | 保留采集能力，当前日报不展示 |
+| 完成任务数 | `/tasks` | 保留采集能力，当前日报不展示 |
 | 缺陷总数 | `/bugs` | 按 `current_owner` 聚合 |
 | 缺陷已关闭 | `/bugs` | `status in bug_closed_statuses` |
 | 缺陷未解决 | `/bugs` | 总数 - 已关闭 |

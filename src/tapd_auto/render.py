@@ -24,7 +24,6 @@ def render_markdown(report: dict[str, Any], report_url: str, image_urls: list[st
         f"### TAPD 每日复盘 {report['date']}",
         "",
         f"今日统计：{summary['project_count']} 个项目 / {summary['iteration_count']} 个迭代 / {summary['member_count']} 人",
-        f"任务整体完成率：{summary['task_completion_rate']}%",
         f"缺陷：未解决 {summary['bugs_open']}，今日新增 {summary['bugs_new']}，今日关闭 {summary['bugs_closed']}",
         "",
     ]
@@ -93,13 +92,11 @@ def render_html(report: dict[str, Any]) -> str:
     tbody tr:hover {{ background: #f9fbfd; }}
     .member-name {{ font-weight: 700; color: #111827; }}
     .role {{ color: #667085; font-size: 12px; margin-top: 2px; }}
-    .rate-track {{ min-width: 120px; height: 8px; background: #e7edf5; border-radius: 999px; overflow: hidden; }}
-    .rate-fill {{ height: 100%; background: #2f80ed; }}
-    .rate-text {{ margin-top: 5px; color: #667085; font-size: 12px; }}
     .pill {{ display: inline-flex; align-items: center; min-height: 24px; padding: 3px 8px; border-radius: 999px; font-size: 12px; margin-right: 5px; border: 1px solid transparent; }}
     .pill-ok {{ color: #176b43; background: #eaf7ef; border-color: #c7ead2; }}
     .pill-warn {{ color: #a23b26; background: #fff1e8; border-color: #ffd5bd; }}
     .pill-info {{ color: #315a94; background: #eef5ff; border-color: #d4e6ff; }}
+    .pill-muted {{ color: #667085; background: #f2f4f7; border-color: #d0d5dd; }}
     .empty {{ margin: 12px 0 0; padding: 14px; border: 1px dashed #ccd6e0; border-radius: 8px; color: #667085; background: #fbfcfd; }}
     a {{ color: #1769c2; text-decoration: none; }}
     a:hover {{ text-decoration: underline; }}
@@ -112,7 +109,7 @@ def render_html(report: dict[str, Any]) -> str:
   <header>
     <div>
       <h1>TAPD 每日复盘 {html.escape(report["date"])}</h1>
-      <div class="subtle">按项目、迭代和团队成员聚合任务、缺陷、需求信息</div>
+      <div class="subtle">按项目、迭代和团队成员聚合缺陷、需求信息</div>
     </div>
     <div class="subtle">{html.escape(report["timezone"])}</div>
   </header>
@@ -129,9 +126,9 @@ def render_html_summary_metrics(summary: dict[str, Any]) -> str:
         ("项目", summary["project_count"]),
         ("迭代", summary["iteration_count"]),
         ("人员", summary["member_count"]),
-        ("任务总数", summary["task_total"]),
-        ("任务完成率", f"{summary['task_completion_rate']}%"),
         ("未解决缺陷", summary["bugs_open"]),
+        ("今日新增缺陷", summary["bugs_new"]),
+        ("今日关闭缺陷", summary["bugs_closed"]),
     ]
     return "\n".join(f"""<div class="metric"><span>{html.escape(str(label))}</span><strong>{html.escape(str(value))}</strong></div>""" for label, value in metrics)
 
@@ -157,7 +154,7 @@ def render_iteration(iteration: dict[str, Any]) -> str:
   </div>
   <div class="work-grid">
     <div class="panel">
-      <div class="panel-head"><h4>团队进度</h4><div class="subtle">{len(iteration["members"])} 人</div></div>
+      <div class="panel-head"><h4>团队缺陷</h4><div class="subtle">{len(iteration["members"])} 人</div></div>
       {member_table}
     </div>
     <div class="panel">
@@ -174,33 +171,48 @@ def render_member_table(members: list[dict[str, Any]]) -> str:
     ordered_members = sorted(
         members,
         key=lambda member: (
+            member_bug_metrics_hidden(member),
             -int(member["bugs_open"]),
             -int(member["bugs_new"]),
-            -int(member["task_total"]),
+            -int(member["bugs_closed"]),
             member["name"],
         ),
     )
     rows = "\n".join(render_member_row(member) for member in ordered_members)
     return f"""<div class="table-wrap">
   <table class="member-table">
-    <thead><tr><th>成员</th><th>任务</th><th>完成率</th><th>缺陷</th></tr></thead>
+    <thead><tr><th>成员</th><th>缺陷</th></tr></thead>
     <tbody>{rows}</tbody>
   </table>
 </div>"""
 
 
 def render_member_row(member: dict[str, Any]) -> str:
-    rate = int(member["task_completion_rate"])
     name = html.escape(member["name"])
     role = html.escape(member.get("role", "") or "团队成员")
     link_start = f'<a href="{html.escape(member["tapd_report_url"])}" target="_blank" rel="noreferrer">' if member["tapd_report_url"] else ""
     link_end = "</a>" if member["tapd_report_url"] else ""
+    bug_metrics = render_member_bug_metrics(member)
     return f"""<tr>
   <td><div class="member-name">{link_start}{name}{link_end}</div><div class="role">{role}</div></td>
-  <td>{member["task_done"]}/{member["task_total"]}</td>
-  <td><div class="rate-track"><div class="rate-fill" style="width:{rate}%"></div></div><div class="rate-text">{rate}%</div></td>
-  <td><span class="pill pill-warn">未解 {member["bugs_open"]}</span><span class="pill pill-info">新增 {member["bugs_new"]}</span><span class="pill pill-ok">已关 {member["bugs_closed"]}</span></td>
+  <td>{bug_metrics}</td>
 </tr>"""
+
+
+def render_member_bug_metrics(member: dict[str, Any]) -> str:
+    if member_bug_metrics_hidden(member):
+        return '<span class="pill pill-muted">缺陷不展示</span>'
+    return (
+        f'<span class="pill pill-warn">未解 {member["bugs_open"]}</span>'
+        f'<span class="pill pill-info">新增 {member["bugs_new"]}</span>'
+        f'<span class="pill pill-ok">已关 {member["bugs_closed"]}</span>'
+    )
+
+
+def member_bug_metrics_hidden(member: dict[str, Any]) -> bool:
+    hidden_users = {"Tora", "nianqiongyue"}
+    hidden_names = {"黄寅子", "粘琼月"}
+    return bool(member.get("hide_bug_metrics")) or member.get("tapd_user") in hidden_users or member.get("name") in hidden_names
 
 
 def render_requirements(requirements: list[dict[str, Any]]) -> str:
@@ -290,7 +302,7 @@ def estimate_project_height(project: dict[str, Any]) -> int:
     for iteration in project["iterations"]:
         member_rows = max(1, (len(iteration["members"]) + 5) // 6)
         requirement_rows = max(1, len(iteration["requirements"]))
-        height += 42 + member_rows * 210 + 34 + requirement_rows * 30 + 34
+        height += 42 + member_rows * 112 + 34 + requirement_rows * 30 + 34
     return height
 
 
@@ -307,8 +319,9 @@ def draw_png_summary_metrics(
         ("项目", summary["project_count"]),
         ("迭代", summary["iteration_count"]),
         ("人员", summary["member_count"]),
-        ("任务完成率", f"{summary['task_completion_rate']}%"),
         ("未解决缺陷", summary["bugs_open"]),
+        ("今日新增缺陷", summary["bugs_new"]),
+        ("今日关闭缺陷", summary["bugs_closed"]),
     ]
     gap = 12
     card_width = (width - gap * (len(metrics) - 1)) // len(metrics)
@@ -329,30 +342,33 @@ def draw_png_members(
     body_font: ImageFont.ImageFont,
     small_font: ImageFont.ImageFont,
 ) -> int:
-    columns = min(6, max(1, len(members)))
+    ordered_members = sorted(
+        members,
+        key=lambda member: (
+            member_bug_metrics_hidden(member),
+            -int(member["bugs_open"]),
+            -int(member["bugs_new"]),
+            -int(member["bugs_closed"]),
+            member["name"],
+        ),
+    )
+    columns = min(6, max(1, len(ordered_members)))
     cell_width = width // columns
-    row_height = 210
-    for index, member in enumerate(members):
+    row_height = 112
+    for index, member in enumerate(ordered_members):
         row = index // columns
         col = index % columns
         left = x + col * cell_width
         top = y + row * row_height
-        rate = int(member["task_completion_rate"])
-        bar_height = max(4, int(rate / 100 * 105))
-        bar_left = left + cell_width // 2 - 20
-        bar_bottom = top + 122
-        color = "#d94841" if member["bugs_open"] > 0 else "#2f80ed"
-        draw.rectangle((bar_left, top + 16, bar_left + 40, bar_bottom), fill="#e6edf7")
-        draw.rounded_rectangle((bar_left, bar_bottom - bar_height, bar_left + 40, bar_bottom), radius=5, fill=color)
-        draw.text((left + 10, top + 134), member["name"], fill="#172033", font=body_font)
-        draw.text((left + 10, top + 160), f"任务 {member['task_done']}/{member['task_total']} · {rate}%", fill="#475569", font=small_font)
-        draw.text(
-            (left + 10, top + 182),
-            f"缺陷 已关 {member['bugs_closed']} / 未解 {member['bugs_open']} / 新增 {member['bugs_new']}",
-            fill="#475569",
-            font=small_font,
-        )
-    rows = max(1, (len(members) + columns - 1) // columns)
+        right = left + cell_width - 10
+        draw.rounded_rectangle((left, top + 4, right, top + 96), radius=8, fill="#f8fafc", outline="#dfe5ee")
+        draw.text((left + 10, top + 16), member["name"], fill="#172033", font=body_font)
+        if member_bug_metrics_hidden(member):
+            draw.text((left + 10, top + 52), "缺陷不展示", fill="#64748b", font=small_font)
+            continue
+        draw.text((left + 10, top + 48), f"未解 {member['bugs_open']} / 新增 {member['bugs_new']}", fill="#a23b26", font=small_font)
+        draw.text((left + 10, top + 72), f"已关 {member['bugs_closed']}", fill="#176b43", font=small_font)
+    rows = max(1, (len(ordered_members) + columns - 1) // columns)
     return y + rows * row_height
 
 

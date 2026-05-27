@@ -219,6 +219,18 @@ class TapdDailyTests(unittest.TestCase):
 
         self.assertEqual(report["projects"][0]["iterations"][0]["requirements"][0]["status"], "已提测")
 
+    def test_build_report_keeps_member_bug_visibility_rule(self):
+        config_text = CONFIG_TEXT.replace(
+            "tapd_user: leiailin\n        role: 当前账号",
+            "tapd_user: leiailin\n        role: 当前账号\n        hide_bug_metrics: true",
+        )
+        config = td.load_config_from_text(config_text, env={})
+        report = td.build_report(config, RAW_DATA, report_date="2026-05-26")
+
+        leiailin = report["projects"][0]["iterations"][0]["members"][0]
+
+        self.assertTrue(leiailin.get("hide_bug_metrics"))
+
     def test_render_markdown_contains_clear_daily_summary(self):
         config = td.load_config_from_text(CONFIG_TEXT, env={})
         report = td.build_report(config, RAW_DATA, report_date="2026-05-26")
@@ -226,20 +238,108 @@ class TapdDailyTests(unittest.TestCase):
 
         self.assertIn("### TAPD 每日复盘 2026-05-26", markdown)
         self.assertIn("今日统计：1 个项目 / 1 个迭代 / 1 人", markdown)
-        self.assertIn("任务整体完成率：50%", markdown)
+        self.assertNotIn("任务整体完成率", markdown)
         self.assertIn("缺陷：未解决 1，今日新增 2，今日关闭 1", markdown)
 
-    def test_render_html_contains_team_progress_table(self):
+    def test_render_html_contains_team_defect_table(self):
         config = td.load_config_from_text(CONFIG_TEXT, env={})
         report = td.build_report(config, RAW_DATA, report_date="2026-05-26")
         html = td.render_html(report)
 
-        self.assertIn("团队进度", html)
+        self.assertIn("团队缺陷", html)
         self.assertIn('class="member-table"', html)
         self.assertIn("<th>成员</th>", html)
         self.assertIn("<th>缺陷</th>", html)
+        self.assertNotIn("<th>任务</th>", html)
+        self.assertNotIn("<th>完成率</th>", html)
+        self.assertNotIn("任务总数", html)
+        self.assertNotIn("任务完成率", html)
         self.assertIn("雷艾琳", html)
         self.assertIn("真实配置同步范围", html)
+
+    def test_render_html_hides_bug_metrics_for_configured_members(self):
+        report = {
+            "date": "2026-05-26",
+            "timezone": "Asia/Shanghai",
+            "summary": {
+                "project_count": 1,
+                "iteration_count": 1,
+                "member_count": 3,
+                "task_total": 99,
+                "task_done": 42,
+                "task_completion_rate": 42,
+                "bugs_closed": 9,
+                "bugs_open": 6,
+                "bugs_new": 3,
+            },
+            "projects": [
+                {
+                    "name": "Deepexi Foil",
+                    "workspace_id": "33002756",
+                    "iterations": [
+                        {
+                            "name": "Deepexi Foil V1.0.0",
+                            "iteration_id": "1133002756001001828",
+                            "requirements": [],
+                            "members": [
+                                {
+                                    "name": "雷艾琳",
+                                    "tapd_user": "leiailin",
+                                    "role": "当前账号",
+                                    "tapd_report_url": "",
+                                    "task_total": 8,
+                                    "task_done": 4,
+                                    "task_completion_rate": 50,
+                                    "bugs_closed": 3,
+                                    "bugs_open": 1,
+                                    "bugs_new": 2,
+                                },
+                                {
+                                    "name": "黄寅子",
+                                    "tapd_user": "Tora",
+                                    "role": "团队成员",
+                                    "tapd_report_url": "",
+                                    "hide_bug_metrics": True,
+                                    "task_total": 7,
+                                    "task_done": 1,
+                                    "task_completion_rate": 14,
+                                    "bugs_closed": 44,
+                                    "bugs_open": 22,
+                                    "bugs_new": 11,
+                                },
+                                {
+                                    "name": "粘琼月",
+                                    "tapd_user": "nianqiongyue",
+                                    "role": "团队成员",
+                                    "tapd_report_url": "",
+                                    "hide_bug_metrics": True,
+                                    "task_total": 6,
+                                    "task_done": 2,
+                                    "task_completion_rate": 33,
+                                    "bugs_closed": 55,
+                                    "bugs_open": 33,
+                                    "bugs_new": 12,
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+
+        html = td.render_html(report)
+
+        self.assertIn("雷艾琳", html)
+        self.assertIn("未解 1", html)
+        self.assertIn("新增 2", html)
+        self.assertIn("已关 3", html)
+        self.assertIn("黄寅子", html)
+        self.assertIn("粘琼月", html)
+        self.assertIn("缺陷不展示", html)
+        self.assertNotIn("未解 22", html)
+        self.assertNotIn("未解 33", html)
+        self.assertNotIn("8/8", html)
+        self.assertNotIn("任务 4/8", html)
 
     def test_render_html_handles_empty_requirement_dates(self):
         config = td.load_config_from_text(CONFIG_TEXT, env={})

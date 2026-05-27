@@ -185,7 +185,7 @@ cron 示例见 `scripts/crontab.example`。
 2. 从配置文件读取项目、迭代、成员、字段映射和状态映射。
 3. dry-run 模式使用 `sample_data`；live 模式调用 TAPD OpenAPI。
 4. live 模式先拉字段发现信息，再拉迭代、任务、缺陷、需求列表。
-5. 按人员计算任务完成率、已关闭缺陷、未解决缺陷、当天新增缺陷。
+5. 按人员聚合缺陷，日报展示未解决、当天新增、当天关闭；任务数据保留采集但页面和通知不展示任务数、完成率或进展。
 6. 按产品经理展示需求排期。
 7. 输出 PNG、HTML、Markdown 和 JSON。
 8. 只有传入 `--send-dingtalk` 时才发送钉钉 Markdown。

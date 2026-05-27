@@ -101,12 +101,14 @@ projects:
       - name: 粘琼月
         tapd_user: nianqiongyue
         role: 团队成员
+        hide_bug_metrics: true
       - name: 郝文林
         tapd_user: haowenlin
         role: 团队成员
       - name: 黄寅子
         tapd_user: Tora
         role: 团队成员
+        hide_bug_metrics: true
       - name: 唐浩宇
         tapd_user: tanghaoyu
         role: 团队成员
