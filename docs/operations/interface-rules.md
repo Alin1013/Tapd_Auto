@@ -1,6 +1,6 @@
 # TAPD / DingTalk Interface Rules
 
-本文档根据 `TAPD钉钉接口调研.md` 沉淀为第一版实现规则。调研文档可以继续作为原始资料，本文档作为代码和配置落地时优先遵循的规则。
+本文档根据 `docs/research/tapd-dingtalk-api-research.md` 沉淀为第一版实现规则。调研文档可以继续作为原始资料，本文档作为代码和配置落地时优先遵循的规则。
 
 ## 1. 总体链路
 

@@ -1,8 +1,16 @@
 .env
 .superpowers/
+.worktrees/
 .playwright-cli/
 __pycache__/
 node_modules/
 public/reports/
+reports/
+logs/
+configs/config.yaml
+.venv/
+dist/
+build/
+*.egg-info/
 *.log
 .DS_Store

@@ -2,19 +2,28 @@
 
 这个项目用于生成 TAPD 每日复盘报表。第一版已经打通本地链路和真实接口边界：读取配置、拉取 TAPD 数据、聚合任务/缺陷/需求、生成 PNG 日报图、HTML 交互报表、Markdown 摘要和 JSON 数据文件。钉钉发送需要显式打开，避免调试时误发群消息。
 
-## 当前文件
+## 目录结构
 
-- `tapd_daily.py`：日报生成主程序。
-- `config.example.yaml`：示例配置，不包含真实 token。
-- `.env`：本地敏感配置，只保存在本机，不提交到 Git。
-- `test_tapd_daily.py`：单元测试。
-- `implementation-plan.md`：实施计划。
-- `interface-rules.md`：TAPD 和钉钉接口落地规则。
-- `TAPD每日复盘链路设计.md`：链路设计说明。
+```text
+src/tapd_auto/             生产代码
+tests/                     自动化测试
+configs/                   配置示例
+docs/design/               设计文档
+docs/operations/           运行规则和实施计划
+docs/research/             接口调研资料
+scripts/                   部署和定时任务脚本
+tapd_daily.py              兼容入口，旧命令仍可使用
+```
 
 ## 本地配置
 
-`.env` 已预留这些字段：
+先从示例文件创建本地 `.env`：
+
+```bash
+cp .env.example .env
+```
+
+`.env` 字段：
 
 ```bash
 TAPD_ACCESS_TOKEN=你的 TAPD 个人访问令牌
@@ -22,7 +31,7 @@ DINGTALK_WEBHOOK=
 DINGTALK_SECRET=
 ```
 
-注意：不要把 `.env` 提交到 Git。当前 `.gitignore` 已经忽略 `.env` 和生成的 `public/reports/`。
+注意：不要把 `.env` 提交到 Git。当前 `.gitignore` 已经忽略 `.env`、真实配置 `configs/config.yaml`、日志和生成报表。
 
 ## 运行依赖
 
@@ -30,14 +39,36 @@ DINGTALK_SECRET=
 python3 -m pip install -r requirements.txt
 ```
 
-如果本机已经安装了 `PyYAML` 和 `requests`，可以直接运行。
+也可以按可安装工具方式运行：
+
+```bash
+python3 -m pip install -e .
+```
+
+安装后会得到命令：
+
+```bash
+tapd-daily --help
+```
 
 ## 本地验证
 
 先使用示例数据生成报表：
 
 ```bash
-python3 tapd_daily.py --config config.example.yaml --date 2026-05-26 --dry-run
+python3 tapd_daily.py --config configs/config.example.yaml --date 2026-05-26 --dry-run
+```
+
+或使用包入口：
+
+```bash
+PYTHONPATH=src python3 -m tapd_auto --config configs/config.example.yaml --date 2026-05-26 --dry-run
+```
+
+安装后也可以直接运行：
+
+```bash
+tapd-daily --config configs/config.example.yaml --date 2026-05-26 --dry-run
 ```
 
 生成文件位置：
@@ -52,7 +83,7 @@ public/reports/2026-05-26/report.json
 测试命令：
 
 ```bash
-python3 -m unittest test_tapd_daily.py -v
+python3 -m unittest discover -s tests -v
 ```
 
 ## 真实同步
@@ -60,19 +91,19 @@ python3 -m unittest test_tapd_daily.py -v
 真实运行前，先复制示例配置并补齐项目、迭代、成员和产品经理：
 
 ```bash
-cp config.example.yaml config.yaml
+cp configs/config.example.yaml configs/config.yaml
 ```
 
 只生成报表，不发送钉钉：
 
 ```bash
-python3 tapd_daily.py --config config.yaml --live
+python3 tapd_daily.py --config configs/config.yaml --live
 ```
 
 生成报表并发送钉钉：
 
 ```bash
-python3 tapd_daily.py --config config.yaml --live --send-dingtalk
+python3 tapd_daily.py --config configs/config.yaml --live --send-dingtalk
 ```
 
 live 模式会额外生成：
@@ -82,6 +113,33 @@ public/reports/YYYY-MM-DD/field-info.json
 ```
 
 这个文件用于核对 TAPD 工作区的状态枚举和自定义字段，方便后续调整 `task_done_statuses`、`bug_closed_statuses` 和字段映射。
+
+## 定时部署
+
+部署到服务器后，建议固定项目路径，例如：
+
+```text
+/opt/tapd-auto/
+```
+
+准备文件：
+
+```bash
+cp .env.example .env
+cp configs/config.example.yaml configs/config.yaml
+mkdir -p logs
+python3 -m pip install -r requirements.txt
+```
+
+运行脚本：
+
+```bash
+bash scripts/run_daily.sh
+```
+
+cron 示例见 `scripts/crontab.example`。
+
+更完整的生产部署和回滚流程见 `docs/operations/production-runbook.md`。
 
 ## 后续需要补充的信息
 
@@ -101,7 +159,7 @@ public/reports/YYYY-MM-DD/field-info.json
 - 缺陷归属字段默认 `current_owner`。
 - 需求产品经理字段默认 `owner`。
 - 钉钉首版使用群自定义机器人 Webhook，开启加签时按 `timestamp + "\n" + secret` 生成 `sign`。
-- 详细规则见 `interface-rules.md`。
+- 详细规则见 `docs/operations/interface-rules.md`。
 
 ## 当前链路
 

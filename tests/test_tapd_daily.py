@@ -1,10 +1,13 @@
 import tempfile
 import textwrap
 import unittest
+import sys
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import tapd_daily as td
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+import tapd_auto as td
 
 
 CONFIG_TEXT = """
@@ -241,7 +244,7 @@ class TapdDailyTests(unittest.TestCase):
         second_response.json.return_value = {"status": 1, "data": [], "info": "success"}
         second_response.raise_for_status.return_value = None
 
-        with patch("tapd_daily.requests.get", side_effect=[first_response, second_response]) as request_get:
+        with patch("tapd_auto.tapd.requests.get", side_effect=[first_response, second_response]) as request_get:
             client = td.TapdClient("https://api.tapd.cn", "token-value")
             items = client.get_paginated("tasks", {"workspace_id": "33002756"})
 
@@ -258,7 +261,7 @@ class TapdDailyTests(unittest.TestCase):
         failed_response.json.return_value = {"status": 0, "data": {}, "info": "token invalid"}
         failed_response.raise_for_status.return_value = None
 
-        with patch("tapd_daily.requests.get", return_value=failed_response):
+        with patch("tapd_auto.tapd.requests.get", return_value=failed_response):
             client = td.TapdClient("https://api.tapd.cn", "token-value")
             with self.assertRaisesRegex(RuntimeError, "token invalid"):
                 client.get_json("tasks", {"limit": 1})
@@ -333,7 +336,7 @@ class TapdDailyTests(unittest.TestCase):
         response.json.return_value = {"errcode": 0, "errmsg": "ok"}
         response.raise_for_status.return_value = None
 
-        with patch("tapd_daily.time.time", return_value=1760000000), patch("tapd_daily.requests.post", return_value=response) as request_post:
+        with patch("tapd_auto.dingtalk.time.time", return_value=1760000000), patch("tapd_auto.dingtalk.requests.post", return_value=response) as request_post:
             td.send_dingtalk_report(config, report, "https://tapd-daily.internal.example.com/reports/2026-05-26/index.html")
 
         request_post.assert_called_once()

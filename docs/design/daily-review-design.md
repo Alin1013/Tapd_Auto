@@ -17,7 +17,7 @@
 - 主信息必须在一张图内直接可读，点击跳转 TAPD 只作为追详情的辅助路径。
 - 仓库保持扁平结构，正式文件直接放在根目录。
 - 文件名可以使用英文，文档内容、配置注释、代码注释和 commit message 尽量使用中文。
-- TAPD 和钉钉接口落地规则单独沉淀在 `interface-rules.md`。
+- TAPD 和钉钉接口落地规则单独沉淀在 `docs/operations/interface-rules.md`。
 
 ## 范围
 
@@ -25,7 +25,7 @@
 
 第一版不依赖 TAPD 页面自动化，不保存用户 TAPD 登录态，不在 HTML 报表中保存 TAPD token。系统只使用服务端环境里的访问令牌拉取日报所需数据。
 
-当前脚手架支持 dry-run 和 live 两种模式：dry-run 使用 `config.example.yaml` 中的 `sample_data` 生成 PNG、HTML、Markdown 和 JSON，live 使用 TAPD OpenAPI 拉取真实数据并额外保存字段发现结果。钉钉发送必须显式传入 `--send-dingtalk`，避免调试时误发群消息。
+当前脚手架支持 dry-run 和 live 两种模式：dry-run 使用 `configs/config.example.yaml` 中的 `sample_data` 生成 PNG、HTML、Markdown 和 JSON，live 使用 TAPD OpenAPI 拉取真实数据并额外保存字段发现结果。钉钉发送必须显式传入 `--send-dingtalk`，避免调试时误发群消息。
 
 接口接入规则：
 
@@ -40,7 +40,7 @@
 
 ## 配置
 
-配置文件建议开发阶段使用 `config.example.yaml`，真实部署时复制为 `config.yaml`：
+配置文件建议开发阶段使用 `configs/config.example.yaml`，真实部署时复制为 `configs/config.yaml`：
 
 ```yaml
 timezone: Asia/Shanghai
