@@ -183,6 +183,7 @@ def collect_live_data(config: dict[str, Any], client: TapdClient) -> tuple[dict[
                                 "begin",
                                 "due",
                                 "created",
+                                "modified",
                                 "completed",
                                 "iteration_id",
                                 "priority_label",

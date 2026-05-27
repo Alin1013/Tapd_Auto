@@ -219,6 +219,8 @@ class TapdDailyTests(unittest.TestCase):
                     "owner": "Tora",
                     "name": "状态映射验证",
                     "status": "status_17",
+                    "begin": "2026-05-26",
+                    "due": "2026-05-27",
                 }
             ],
         }
@@ -366,6 +368,8 @@ class TapdDailyTests(unittest.TestCase):
                     "owner": "Tora",
                     "name": "V1.1 产品总需求",
                     "status": "status_17",
+                    "begin": "2026-05-26",
+                    "due": "2026-05-27",
                 }
             ],
         }
@@ -381,6 +385,74 @@ class TapdDailyTests(unittest.TestCase):
         self.assertEqual(iterations[1]["summary"]["bugs_new"], 1)
         self.assertEqual(iterations[1]["summary"]["bugs_closed"], 1)
         self.assertEqual(iterations[1]["product_requirements"][0]["title"], "V1.1 产品总需求")
+
+    def test_build_report_skips_projects_and_iterations_without_daily_activity(self):
+        config = {
+            "timezone": "Asia/Shanghai",
+            "tapd": {
+                "fields": {
+                    "task_owner": "owner",
+                    "bug_owner": "current_owner",
+                    "story_pm": "owner",
+                },
+                "bug_closed_statuses": ["closed"],
+                "status_labels": {"stories": {"status_17": "已提测"}},
+            },
+            "projects": [
+                {
+                    "name": "今日项目",
+                    "workspace_id": "active",
+                    "iterations": [{"name": "今日迭代", "iteration_id": "active-iteration"}],
+                    "members": [{"name": "雷艾琳", "tapd_user": "leiailin"}],
+                    "product_managers": [{"name": "黄寅子", "tapd_user": "Tora"}],
+                },
+                {
+                    "name": "历史项目",
+                    "workspace_id": "stale",
+                    "iterations": [{"name": "历史迭代", "iteration_id": "stale-iteration"}],
+                    "members": [{"name": "雷艾琳", "tapd_user": "leiailin"}],
+                    "product_managers": [{"name": "黄寅子", "tapd_user": "Tora"}],
+                },
+            ],
+        }
+        raw_data = {
+            "tasks": [],
+            "bugs": [
+                {
+                    "workspace_id": "active",
+                    "iteration_id": "active-iteration",
+                    "current_owner": "leiailin",
+                    "status": "in_progress",
+                    "created": "2026-05-26 09:00:00",
+                },
+                {
+                    "workspace_id": "stale",
+                    "iteration_id": "stale-iteration",
+                    "current_owner": "leiailin",
+                    "status": "in_progress",
+                    "created": "2026-05-20 09:00:00",
+                },
+            ],
+            "stories": [
+                {
+                    "workspace_id": "stale",
+                    "iteration_id": "stale-iteration",
+                    "owner": "Tora",
+                    "name": "历史产品需求",
+                    "status": "status_17",
+                    "begin": "2026-05-01",
+                    "due": "2026-05-10",
+                }
+            ],
+        }
+
+        report = td.build_report(config, raw_data, report_date="2026-05-26")
+
+        self.assertEqual(report["summary"]["project_count"], 1)
+        self.assertEqual(report["summary"]["iteration_count"], 1)
+        self.assertEqual(report["summary"]["bugs_open"], 1)
+        self.assertEqual([project["name"] for project in report["projects"]], ["今日项目"])
+        self.assertEqual(report["projects"][0]["iterations"][0]["name"], "今日迭代")
 
     def test_render_markdown_contains_clear_daily_summary(self):
         config = td.load_config_from_text(CONFIG_TEXT, env={})
@@ -923,7 +995,7 @@ class TapdDailyTests(unittest.TestCase):
 
         html = td.render_html(report)
 
-        self.assertIn("空日期需求", html)
+        self.assertNotIn("空日期需求", html)
         self.assertIn("有日期需求", html)
         self.assertIn("已提测", html)
         self.assertNotIn(">None<", html)

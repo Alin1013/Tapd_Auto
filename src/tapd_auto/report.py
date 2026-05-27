@@ -44,7 +44,7 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
     report_projects: list[dict[str, Any]] = []
     unique_users: set[str] = set()
     summary = {
-        "project_count": len(config["projects"]),
+        "project_count": 0,
         "iteration_count": 0,
         "member_count": 0,
         "task_total": 0,
@@ -65,6 +65,8 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
 
         for iteration in project["iterations"]:
             member_results = []
+            iteration_task_total = 0
+            iteration_task_done = 0
             iteration_summary = {
                 "member_count": 0,
                 "bugs_closed": 0,
@@ -94,12 +96,9 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
                 bugs_new = sum(1 for bug in member_bugs if is_same_day(bug.get("created"), report_date))
                 hide_bug_metrics = member_hides_bug_metrics(member)
 
-                summary["task_total"] += task_total
-                summary["task_done"] += task_done
+                iteration_task_total += task_total
+                iteration_task_done += task_done
                 if not hide_bug_metrics:
-                    summary["bugs_closed"] += bugs_closed
-                    summary["bugs_open"] += bugs_open
-                    summary["bugs_new"] += bugs_new
                     iteration_summary["member_count"] += 1
                     iteration_summary["bugs_closed"] += bugs_closed
                     iteration_summary["bugs_open"] += bugs_open
@@ -129,11 +128,17 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
                 fields["story_pm"],
                 status_labels.get("stories", {}),
             )
-            product_requirements = build_product_requirements(requirements)
-            if not iteration_has_report_content(iteration_summary, product_requirements):
+            product_requirements = build_product_requirements(requirements, report_date)
+            if not iteration_has_daily_activity(iteration_summary, product_requirements):
                 continue
 
+            summary["task_total"] += iteration_task_total
+            summary["task_done"] += iteration_task_done
+            summary["bugs_closed"] += iteration_summary["bugs_closed"]
+            summary["bugs_open"] += iteration_summary["bugs_open"]
+            summary["bugs_new"] += iteration_summary["bugs_new"]
             summary["iteration_count"] += 1
+            unique_users.update(member["tapd_user"] for member in member_results)
             project_result["iterations"].append(
                 {
                     "name": iteration["name"],
@@ -145,8 +150,10 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
                 }
             )
 
-        report_projects.append(project_result)
+        if project_result["iterations"]:
+            report_projects.append(project_result)
 
+    summary["project_count"] = len(report_projects)
     summary["member_count"] = len(unique_users)
     summary["task_completion_rate"] = percent(summary["task_done"], summary["task_total"])
 
@@ -183,22 +190,26 @@ def build_requirements(
                 "status": status_labels.get(raw_status, raw_status),
                 "start": first_non_empty_text(story.get("start"), story.get("begin")),
                 "end": first_non_empty_text(story.get("end"), story.get("due")),
+                "created": first_non_empty_text(story.get("created")),
+                "modified": first_non_empty_text(story.get("modified")),
+                "completed": first_non_empty_text(story.get("completed")),
                 "url": first_non_empty_text(story.get("url")),
             }
         )
     return sorted(requirements, key=lambda item: (item["start"], item["end"], item["title"]))
 
 
-def build_product_requirements(requirements: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def build_product_requirements(requirements: list[dict[str, Any]], report_date: str | None = None) -> list[dict[str, Any]]:
     return [
         requirement
         for requirement in requirements
         if requirement.get("product_manager_user") in HIDDEN_BUG_USERS or requirement.get("product_manager") in HIDDEN_BUG_NAMES
+        if report_date is None or requirement_active_on_day(requirement, report_date)
     ]
 
 
-def iteration_has_report_content(summary: dict[str, int], product_requirements: list[dict[str, Any]]) -> bool:
-    return any(int(summary[key]) > 0 for key in ["bugs_closed", "bugs_open", "bugs_new"]) or bool(product_requirements)
+def iteration_has_daily_activity(summary: dict[str, int], product_requirements: list[dict[str, Any]]) -> bool:
+    return any(int(summary[key]) > 0 for key in ["bugs_closed", "bugs_new"]) or bool(product_requirements)
 
 
 def normalize_record(item: dict[str, Any]) -> dict[str, Any]:
@@ -243,6 +254,32 @@ def bug_closed_on_day(bug: dict[str, Any], closed_statuses: set[str], report_dat
         if is_same_day(bug.get(field_name), report_date):
             return True
     return False
+
+
+def requirement_active_on_day(requirement: dict[str, Any], report_date: str) -> bool:
+    for field_name in ["created", "modified", "completed"]:
+        if is_same_day(requirement.get(field_name), report_date):
+            return True
+    return date_range_includes(requirement.get("start"), requirement.get("end"), report_date)
+
+
+def date_range_includes(start: Any, end: Any, report_date: str) -> bool:
+    start_date = date_part(start)
+    end_date = date_part(end)
+    if start_date and end_date:
+        return start_date <= report_date <= end_date
+    if start_date:
+        return start_date == report_date
+    if end_date:
+        return end_date == report_date
+    return False
+
+
+def date_part(value: Any) -> str:
+    if value is None:
+        return ""
+    match = re.match(r"\d{4}-\d{2}-\d{2}", str(value))
+    return match.group(0) if match else ""
 
 
 def field_matches(item: dict[str, Any], field_name: str, user: str) -> bool:
