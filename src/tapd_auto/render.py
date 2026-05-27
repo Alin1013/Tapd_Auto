@@ -56,6 +56,7 @@ def write_field_info(field_info: dict[str, Any], output_dir: Path) -> Path:
 def render_html(report: dict[str, Any]) -> str:
     project_sections = "\n".join(render_project(project) for project in report["projects"])
     summary = report["summary"]
+    summary_metrics = render_html_summary_metrics(summary)
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -64,39 +65,58 @@ def render_html(report: dict[str, Any]) -> str:
   <link rel="icon" href="data:,">
   <title>TAPD 每日复盘 {html.escape(report["date"])}</title>
   <style>
-    body {{ margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #172033; background: #f6f8fb; }}
-    main {{ max-width: 1180px; margin: 0 auto; padding: 28px 20px 44px; }}
-    h1, h2, h3 {{ margin: 0; }}
-    .summary {{ display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 12px; margin: 18px 0 24px; }}
-    .metric, section {{ background: #fff; border: 1px solid #dfe5ee; border-radius: 8px; }}
-    .metric {{ padding: 14px; }}
-    .metric strong {{ display: block; font-size: 22px; margin-top: 4px; }}
+    :root {{ color-scheme: light; }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #1f2933; background: #f4f6f8; }}
+    main {{ max-width: 1240px; margin: 0 auto; padding: 28px 20px 44px; }}
+    header {{ display: flex; justify-content: space-between; gap: 16px; align-items: flex-end; margin-bottom: 18px; }}
+    h1, h2, h3, h4 {{ margin: 0; letter-spacing: 0; }}
+    h1 {{ font-size: 30px; line-height: 1.18; }}
+    h2 {{ font-size: 22px; }}
+    h3 {{ font-size: 18px; }}
+    h4 {{ font-size: 15px; color: #334155; }}
+    .subtle, .meta {{ color: #667085; font-size: 13px; line-height: 1.45; }}
+    .summary {{ display: grid; grid-template-columns: repeat(6, minmax(132px, 1fr)); gap: 12px; margin: 18px 0 18px; }}
+    .metric, section, .panel {{ background: #fff; border: 1px solid #d9e1ea; border-radius: 8px; }}
+    .metric {{ padding: 14px 16px; min-height: 86px; }}
+    .metric span {{ display: block; color: #667085; font-size: 13px; }}
+    .metric strong {{ display: block; font-size: 25px; line-height: 1; margin-top: 10px; color: #111827; }}
     section {{ padding: 18px; margin-top: 16px; }}
-    .iteration {{ margin-top: 18px; }}
-    .bars {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 14px; align-items: end; min-height: 230px; margin-top: 16px; }}
-    .person {{ display: grid; grid-template-rows: 130px auto; gap: 8px; align-items: end; text-align: center; }}
-    .bar-wrap {{ height: 130px; display: flex; align-items: flex-end; justify-content: center; border-bottom: 1px solid #ccd5e1; }}
-    .bar {{ width: 42px; min-height: 4px; border-radius: 6px 6px 0 0; background: #2f80ed; }}
-    .bar.warn {{ background: #d94841; }}
-    .name {{ font-weight: 700; }}
-    .meta {{ color: #5d6b82; font-size: 13px; line-height: 1.45; }}
-    table {{ width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }}
-    th, td {{ padding: 10px 8px; border-bottom: 1px solid #e7ecf3; text-align: left; }}
-    th {{ color: #44546a; background: #f8fafc; }}
-    a {{ color: #1d6fd8; text-decoration: none; }}
-    @media (max-width: 760px) {{ .summary {{ grid-template-columns: repeat(2, 1fr); }} main {{ padding: 20px 12px; }} }}
+    .project-head, .iteration-head, .panel-head {{ display: flex; justify-content: space-between; gap: 14px; align-items: center; }}
+    .iteration {{ margin-top: 18px; padding-top: 16px; border-top: 1px solid #e6ebf1; }}
+    .work-grid {{ display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr); gap: 14px; margin-top: 14px; align-items: start; }}
+    .panel {{ padding: 14px; overflow: hidden; }}
+    .table-wrap {{ overflow-x: auto; margin-top: 10px; }}
+    table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
+    th, td {{ padding: 11px 10px; border-bottom: 1px solid #e6ebf1; text-align: left; vertical-align: middle; white-space: nowrap; }}
+    th {{ color: #475467; background: #f8fafb; font-weight: 700; }}
+    tbody tr:hover {{ background: #f9fbfd; }}
+    .member-name {{ font-weight: 700; color: #111827; }}
+    .role {{ color: #667085; font-size: 12px; margin-top: 2px; }}
+    .rate-track {{ min-width: 120px; height: 8px; background: #e7edf5; border-radius: 999px; overflow: hidden; }}
+    .rate-fill {{ height: 100%; background: #2f80ed; }}
+    .rate-text {{ margin-top: 5px; color: #667085; font-size: 12px; }}
+    .pill {{ display: inline-flex; align-items: center; min-height: 24px; padding: 3px 8px; border-radius: 999px; font-size: 12px; margin-right: 5px; border: 1px solid transparent; }}
+    .pill-ok {{ color: #176b43; background: #eaf7ef; border-color: #c7ead2; }}
+    .pill-warn {{ color: #a23b26; background: #fff1e8; border-color: #ffd5bd; }}
+    .pill-info {{ color: #315a94; background: #eef5ff; border-color: #d4e6ff; }}
+    .empty {{ margin: 12px 0 0; padding: 14px; border: 1px dashed #ccd6e0; border-radius: 8px; color: #667085; background: #fbfcfd; }}
+    a {{ color: #1769c2; text-decoration: none; }}
+    a:hover {{ text-decoration: underline; }}
+    @media (max-width: 920px) {{ .summary {{ grid-template-columns: repeat(3, 1fr); }} .work-grid {{ grid-template-columns: 1fr; }} header {{ align-items: flex-start; flex-direction: column; }} }}
+    @media (max-width: 560px) {{ main {{ padding: 20px 12px; }} .summary {{ grid-template-columns: repeat(2, 1fr); }} .project-head, .iteration-head, .panel-head {{ align-items: flex-start; flex-direction: column; }} th, td {{ padding: 9px 8px; }} }}
   </style>
 </head>
 <body>
 <main>
-  <h1>TAPD 每日复盘 {html.escape(report["date"])}</h1>
-  <div class="summary">
-    <div class="metric">项目<strong>{summary["project_count"]}</strong></div>
-    <div class="metric">迭代<strong>{summary["iteration_count"]}</strong></div>
-    <div class="metric">人员<strong>{summary["member_count"]}</strong></div>
-    <div class="metric">任务完成率<strong>{summary["task_completion_rate"]}%</strong></div>
-    <div class="metric">未解决缺陷<strong>{summary["bugs_open"]}</strong></div>
-  </div>
+  <header>
+    <div>
+      <h1>TAPD 每日复盘 {html.escape(report["date"])}</h1>
+      <div class="subtle">按项目、迭代和团队成员聚合任务、缺陷、需求信息</div>
+    </div>
+    <div class="subtle">{html.escape(report["timezone"])}</div>
+  </header>
+  <div class="summary">{summary_metrics}</div>
   {project_sections}
 </main>
 </body>
@@ -104,64 +124,117 @@ def render_html(report: dict[str, Any]) -> str:
 """
 
 
+def render_html_summary_metrics(summary: dict[str, Any]) -> str:
+    metrics = [
+        ("项目", summary["project_count"]),
+        ("迭代", summary["iteration_count"]),
+        ("人员", summary["member_count"]),
+        ("任务总数", summary["task_total"]),
+        ("任务完成率", f"{summary['task_completion_rate']}%"),
+        ("未解决缺陷", summary["bugs_open"]),
+    ]
+    return "\n".join(f"""<div class="metric"><span>{html.escape(str(label))}</span><strong>{html.escape(str(value))}</strong></div>""" for label, value in metrics)
+
+
 def render_project(project: dict[str, Any]) -> str:
     iterations = "\n".join(render_iteration(iteration) for iteration in project["iterations"])
     return f"""<section>
-  <h2>{html.escape(project["name"])}</h2>
+  <div class="project-head">
+    <h2>{html.escape(project["name"])}</h2>
+    <div class="subtle">workspace_id: {html.escape(project["workspace_id"])}</div>
+  </div>
   {iterations}
 </section>"""
 
 
 def render_iteration(iteration: dict[str, Any]) -> str:
-    bars = "\n".join(render_member(member) for member in iteration["members"])
+    member_table = render_member_table(iteration["members"])
     requirements = render_requirements(iteration["requirements"])
     return f"""<div class="iteration">
-  <h3>{html.escape(iteration["name"])}</h3>
-  <div class="bars">{bars}</div>
-  {requirements}
-</div>"""
-
-
-def render_member(member: dict[str, Any]) -> str:
-    rate = member["task_completion_rate"]
-    warn_class = " warn" if member["bugs_open"] > 0 else ""
-    name = html.escape(member["name"])
-    link_start = f'<a href="{html.escape(member["tapd_report_url"])}" target="_blank" rel="noreferrer">' if member["tapd_report_url"] else ""
-    link_end = "</a>" if member["tapd_report_url"] else ""
-    return f"""<div class="person" title="任务 {member["task_done"]}/{member["task_total"]}，缺陷 已关 {member["bugs_closed"]} / 未解 {member["bugs_open"]} / 新增 {member["bugs_new"]}">
-  <div class="bar-wrap"><div class="bar{warn_class}" style="height:{max(rate, 3)}%"></div></div>
-  <div>
-    <div class="name">{link_start}{name}{link_end}</div>
-    <div class="meta">任务 {member["task_done"]}/{member["task_total"]} · {rate}%</div>
-    <div class="meta">缺陷 已关 {member["bugs_closed"]} / 未解 {member["bugs_open"]} / 新增 {member["bugs_new"]}</div>
+  <div class="iteration-head">
+    <h3>{html.escape(iteration["name"])}</h3>
+    <div class="subtle">iteration_id: {html.escape(iteration["iteration_id"])}</div>
+  </div>
+  <div class="work-grid">
+    <div class="panel">
+      <div class="panel-head"><h4>团队进度</h4><div class="subtle">{len(iteration["members"])} 人</div></div>
+      {member_table}
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h4>需求排期</h4><div class="subtle">{len(iteration["requirements"])} 条</div></div>
+      {requirements}
+    </div>
   </div>
 </div>"""
 
 
+def render_member_table(members: list[dict[str, Any]]) -> str:
+    if not members:
+        return '<p class="empty">暂无成员数据。</p>'
+    ordered_members = sorted(
+        members,
+        key=lambda member: (
+            -int(member["bugs_open"]),
+            -int(member["bugs_new"]),
+            -int(member["task_total"]),
+            member["name"],
+        ),
+    )
+    rows = "\n".join(render_member_row(member) for member in ordered_members)
+    return f"""<div class="table-wrap">
+  <table class="member-table">
+    <thead><tr><th>成员</th><th>任务</th><th>完成率</th><th>缺陷</th></tr></thead>
+    <tbody>{rows}</tbody>
+  </table>
+</div>"""
+
+
+def render_member_row(member: dict[str, Any]) -> str:
+    rate = int(member["task_completion_rate"])
+    name = html.escape(member["name"])
+    role = html.escape(member.get("role", "") or "团队成员")
+    link_start = f'<a href="{html.escape(member["tapd_report_url"])}" target="_blank" rel="noreferrer">' if member["tapd_report_url"] else ""
+    link_end = "</a>" if member["tapd_report_url"] else ""
+    return f"""<tr>
+  <td><div class="member-name">{link_start}{name}{link_end}</div><div class="role">{role}</div></td>
+  <td>{member["task_done"]}/{member["task_total"]}</td>
+  <td><div class="rate-track"><div class="rate-fill" style="width:{rate}%"></div></div><div class="rate-text">{rate}%</div></td>
+  <td><span class="pill pill-warn">未解 {member["bugs_open"]}</span><span class="pill pill-info">新增 {member["bugs_new"]}</span><span class="pill pill-ok">已关 {member["bugs_closed"]}</span></td>
+</tr>"""
+
+
 def render_requirements(requirements: list[dict[str, Any]]) -> str:
     if not requirements:
-        return "<p class=\"meta\">暂无产品需求排期。</p>"
+        return '<p class="empty">暂无产品需求排期。</p>'
     rows = "\n".join(
         f"""<tr>
   <td>{render_requirement_link(item)}</td>
-  <td>{html.escape(item["product_manager"])}</td>
-  <td>{html.escape(item["status"])}</td>
-  <td>{html.escape(item["start"])}</td>
-  <td>{html.escape(item["end"])}</td>
+  <td>{escape_html_value(item["product_manager"])}</td>
+  <td>{escape_html_value(item["status"])}</td>
+  <td>{escape_html_value(item["start"])}</td>
+  <td>{escape_html_value(item["end"])}</td>
 </tr>"""
         for item in requirements
     )
-    return f"""<table>
-  <thead><tr><th>需求</th><th>产品经理</th><th>状态</th><th>开始</th><th>结束</th></tr></thead>
-  <tbody>{rows}</tbody>
-</table>"""
+    return f"""<div class="table-wrap">
+  <table class="requirement-table">
+    <thead><tr><th>需求</th><th>产品经理</th><th>状态</th><th>开始</th><th>结束</th></tr></thead>
+    <tbody>{rows}</tbody>
+  </table>
+</div>"""
 
 
 def render_requirement_link(item: dict[str, Any]) -> str:
-    title = html.escape(item["title"])
+    title = escape_html_value(item["title"])
     if item["url"]:
-        return f'<a href="{html.escape(item["url"])}" target="_blank" rel="noreferrer">{title}</a>'
+        return f'<a href="{escape_html_value(item["url"])}" target="_blank" rel="noreferrer">{title}</a>'
     return title
+
+
+def escape_html_value(value: Any) -> str:
+    if value is None:
+        return ""
+    return html.escape(str(value))
 
 
 def write_summary_png(report: dict[str, Any], output_dir: Path) -> Path:

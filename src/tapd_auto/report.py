@@ -33,6 +33,7 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
     done_task_statuses = tapd_rules["task_done_statuses"]
     closed_bug_statuses = tapd_rules["bug_closed_statuses"]
     fields = tapd_rules["fields"]
+    status_labels = tapd_rules["status_labels"]
     normalized_data = {
         data_type: [normalize_record(item) for item in items]
         for data_type, items in raw_data.items()
@@ -106,7 +107,14 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
                     }
                 )
 
-            requirements = build_requirements(normalized_data.get("stories", []), project, iteration, product_managers, fields["story_pm"])
+            requirements = build_requirements(
+                normalized_data.get("stories", []),
+                project,
+                iteration,
+                product_managers,
+                fields["story_pm"],
+                status_labels.get("stories", {}),
+            )
             project_result["iterations"].append(
                 {
                     "name": iteration["name"],
@@ -135,19 +143,22 @@ def build_requirements(
     iteration: dict[str, Any],
     product_managers: dict[str, str],
     pm_field: str,
+    status_labels: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     requirements = []
+    status_labels = status_labels or {}
     for story in stories:
         if not is_in_scope(story, project, iteration):
             continue
         matched_user = first_matching_value(story, pm_field, set(product_managers.keys()))
         if matched_user is None:
             continue
+        raw_status = str(story.get("v_status") or story.get("status", ""))
         requirements.append(
             {
                 "title": story.get("title") or story.get("name", ""),
                 "product_manager": product_managers.get(matched_user, matched_user),
-                "status": story.get("v_status") or story.get("status", ""),
+                "status": status_labels.get(raw_status, raw_status),
                 "start": story.get("start") or story.get("begin", ""),
                 "end": story.get("end") or story.get("due", ""),
                 "url": story.get("url", ""),
@@ -183,6 +194,7 @@ def get_tapd_rules(config: dict[str, Any]) -> dict[str, Any]:
         "task_done_statuses": set(tapd.get("task_done_statuses") or legacy_status.get("done_tasks", DEFAULT_DONE_TASK_STATUSES)),
         "bug_closed_statuses": set(tapd.get("bug_closed_statuses") or legacy_status.get("closed_bugs", DEFAULT_CLOSED_BUG_STATUSES)),
         "fields": {**DEFAULT_TAPD_FIELDS, **tapd.get("fields", {})},
+        "status_labels": tapd.get("status_labels", {}),
     }
 
 

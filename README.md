@@ -158,12 +158,13 @@ cron 示例见 `scripts/crontab.example`。
 - 当前 TAPD 账号：`leiailin` / 雷艾琳。
 - 当前真实项目：Deepexi Foil，`workspace_id=33002756`。
 - 当前配置迭代：Deepexi Foil V1.0.0，`iteration_id=1133002756001001828`。
+- 当前团队成员已按截图名单同步到配置，映射见 `docs/operations/account-sync.md`。
 - 本地真实运行配置在 `configs/config.yaml`，该文件不提交到 Git。
 
 ## 后续需要补充的信息
 
-- 其他成员姓名、TAPD 用户标识、角色、详情链接。
-- 产品经理姓名和 TAPD 用户标识。
+- 成员角色、详情链接和手机号。
+- 是否需要把产品经理配置从团队成员中单独拆出来。
 - 钉钉机器人 webhook 和加签 secret。
 - 如后续新增项目，需要补充对应 `workspace_id` 和 `iteration_id`。
 

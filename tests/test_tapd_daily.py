@@ -32,6 +32,10 @@ tapd:
     task_owner: owner
     bug_owner: current_owner
     story_pm: owner
+  status_labels:
+    stories:
+      status_17: 已提测
+      status_21: 发布
 
 report:
   public_base_url: https://tapd-daily.internal.example.com
@@ -195,6 +199,26 @@ class TapdDailyTests(unittest.TestCase):
         self.assertEqual(leiailin["bugs_closed"], 1)
         self.assertEqual(iteration["requirements"][0]["title"], "包装数据也能展示")
 
+    def test_build_report_uses_configured_story_status_labels(self):
+        config = td.load_config_from_text(CONFIG_TEXT, env={})
+        raw_data = {
+            "tasks": [],
+            "bugs": [],
+            "stories": [
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001828",
+                    "owner": "leiailin",
+                    "name": "状态映射验证",
+                    "status": "status_17",
+                }
+            ],
+        }
+
+        report = td.build_report(config, raw_data, report_date="2026-05-26")
+
+        self.assertEqual(report["projects"][0]["iterations"][0]["requirements"][0]["status"], "已提测")
+
     def test_render_markdown_contains_clear_daily_summary(self):
         config = td.load_config_from_text(CONFIG_TEXT, env={})
         report = td.build_report(config, RAW_DATA, report_date="2026-05-26")
@@ -204,6 +228,42 @@ class TapdDailyTests(unittest.TestCase):
         self.assertIn("今日统计：1 个项目 / 1 个迭代 / 1 人", markdown)
         self.assertIn("任务整体完成率：50%", markdown)
         self.assertIn("缺陷：未解决 1，今日新增 2，今日关闭 1", markdown)
+
+    def test_render_html_contains_team_progress_table(self):
+        config = td.load_config_from_text(CONFIG_TEXT, env={})
+        report = td.build_report(config, RAW_DATA, report_date="2026-05-26")
+        html = td.render_html(report)
+
+        self.assertIn("团队进度", html)
+        self.assertIn('class="member-table"', html)
+        self.assertIn("<th>成员</th>", html)
+        self.assertIn("<th>缺陷</th>", html)
+        self.assertIn("雷艾琳", html)
+        self.assertIn("真实配置同步范围", html)
+
+    def test_render_html_handles_empty_requirement_dates(self):
+        config = td.load_config_from_text(CONFIG_TEXT, env={})
+        raw_data = {
+            "tasks": [],
+            "bugs": [],
+            "stories": [
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001828",
+                    "owner": "leiailin",
+                    "name": "空日期需求",
+                    "status": "status_17",
+                    "begin": None,
+                    "due": None,
+                }
+            ],
+        }
+        report = td.build_report(config, raw_data, report_date="2026-05-26")
+
+        html = td.render_html(report)
+
+        self.assertIn("空日期需求", html)
+        self.assertIn("已提测", html)
 
     def test_write_report_outputs_html_markdown_and_json(self):
         config = td.load_config_from_text(CONFIG_TEXT, env={})
