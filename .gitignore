@@ -1,5 +1,7 @@
 .env
 .superpowers/
+.playwright-cli/
+__pycache__/
 node_modules/
 public/reports/
 *.log

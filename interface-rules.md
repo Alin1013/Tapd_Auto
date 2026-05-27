@@ -1,0 +1,165 @@
+# TAPD / DingTalk Interface Rules
+
+本文档根据 `TAPD钉钉接口调研.md` 沉淀为第一版实现规则。调研文档可以继续作为原始资料，本文档作为代码和配置落地时优先遵循的规则。
+
+## 1. 总体链路
+
+第一版链路按以下顺序执行：
+
+1. 加载 `.env` 和配置文件。
+2. 校验 `TAPD_ACCESS_TOKEN` 存在，但不得打印 token。
+3. 校验钉钉发送配置；Webhook 模式下 `DINGTALK_SECRET` 非空则启用加签。
+4. 对每个 `workspace_id` 拉字段信息，确认任务、缺陷、需求的状态和自定义字段。
+5. 对每个项目迭代拉取 `/iterations`、`/tasks`、`/bugs`、`/stories`。
+6. 本地聚合任务进度、缺陷统计和需求排期。
+7. 生成 HTML、Markdown、JSON；后续再补 PNG。
+8. 通过统一通知适配器发送日报，首版使用钉钉 Webhook，长期保留应用机器人适配空间。
+
+## 2. TAPD 通用规则
+
+- 基础地址固定为 `https://api.tapd.cn`，可通过 `tapd.base_url` 覆盖。
+- 当前鉴权模式优先使用 `Authorization: Bearer ${TAPD_ACCESS_TOKEN}`。
+- TAPD 响应中 `status = 1` 视为成功，其他状态必须作为失败处理，并输出 `info`。
+- TAPD 列表记录可能包在 `Task`、`Bug`、`Story`、`Iteration` 等对象键下，进入聚合前必须先展开为扁平字段。
+- 列表接口统一使用 `limit=200&page=N` 翻页。
+- 当某页返回数量少于 200 时停止翻页。
+- 时间统计按 `Asia/Shanghai` 日期口径。
+- 配置、日志、报表都不得写入 TAPD token。
+
+## 3. TAPD 字段发现规则
+
+真实接口接入前，每个工作区至少拉一次字段配置：
+
+```text
+GET /tasks/get_fields_info?workspace_id={workspace_id}
+GET /bugs/get_fields_info?workspace_id={workspace_id}&all_options=1
+GET /stories/get_fields_info?workspace_id={workspace_id}
+```
+
+字段发现要确认：
+
+| 对象 | 必须确认 |
+| --- | --- |
+| 任务 | `status` 候选值、`iteration_id`、负责人字段 |
+| 缺陷 | `status` 候选值、`current_owner` 是否符合归属口径、自定义责任字段 |
+| 需求 | `status` 候选值、`owner` 是否为产品经理字段、自定义 PM 字段 |
+
+如果某个工作区字段不同，只改配置，不改聚合代码。
+
+## 4. 字段映射规则
+
+配置入口：
+
+```yaml
+tapd:
+  fields:
+    task_owner: owner
+    bug_owner: current_owner
+    story_pm: owner
+```
+
+第一版默认规则：
+
+- 任务归属字段：`owner`。
+- 缺陷归属字段：`current_owner`。
+- 产品经理需求字段：`owner`。
+
+缺陷统计口径：
+
+- 未解决缺陷：`current_owner == tapd_user` 且状态不在 `bug_closed_statuses`。
+- 已关闭缺陷：`current_owner == tapd_user` 且状态在 `bug_closed_statuses`。
+- 今日新增缺陷：`current_owner == tapd_user` 且 `created` 落在当天。
+- `current_owner` 为空或不在配置成员中时，后续应归入“未分配/未配置人员”异常提示。
+
+当前“已关闭缺陷”表示最后或当前归属在此人的已关闭缺陷，不等同于“由此人关闭的缺陷”。如果后续要统计关闭动作人，需要另行确认解决人、关闭人或自定义流程字段。
+
+## 5. 状态映射规则
+
+配置入口：
+
+```yaml
+tapd:
+  task_done_statuses:
+    - done
+    - 已完成
+    - 已关闭
+  bug_closed_statuses:
+    - 已解决
+    - 已关闭
+    - 无需解决
+```
+
+规则：
+
+- 每个项目真实状态以字段发现接口为准。
+- 任务完成率 = 完成任务数 / 总任务数。
+- 未解决缺陷 = 缺陷总数 - 已关闭缺陷。
+- 状态映射不确定时，先展示原始状态候选，不擅自归类。
+
+## 6. 钉钉 Webhook 规则
+
+首版通知使用群自定义机器人 Webhook：
+
+```text
+POST https://oapi.dingtalk.com/robot/send?access_token=...
+Content-Type: application/json;charset=utf-8
+```
+
+发送 payload：
+
+```json
+{
+  "msgtype": "markdown",
+  "markdown": {
+    "title": "TAPD 每日复盘 2026-05-26",
+    "text": "### TAPD 每日复盘 2026-05-26"
+  },
+  "at": {
+    "atMobiles": [],
+    "isAtAll": false
+  }
+}
+```
+
+加签规则：
+
+```text
+timestamp = 当前毫秒时间戳
+string_to_sign = timestamp + "\n" + secret
+sign = urlencode(base64(hmac_sha256(secret, string_to_sign)))
+send_url = webhook + "&timestamp=" + timestamp + "&sign=" + sign
+```
+
+约束：
+
+- `DINGTALK_WEBHOOK` 和 `DINGTALK_SECRET` 只放 `.env`。
+- Markdown 中的图片 URL 和 HTML 报表 URL 必须能被钉钉客户端访问。
+- 自定义机器人限流要按每分钟 20 条消息控制，图片分页时应合并发送。
+- 发送层必须保留统一入口，后续可以替换为应用机器人。
+
+## 7. 长期通知适配规则
+
+发送层按统一接口设计：
+
+```text
+Notifier
+  DingTalkWebhookNotifier
+  DingTalkAppBotNotifier
+```
+
+业务层只关心：
+
+```text
+send_daily_report(summary, image_urls, report_url)
+```
+
+长期如果切到应用机器人，可以支持上传图片、互动卡片、按钮和回调；不要把 Webhook 拼接逻辑散落在业务层。
+
+## 8. 待确认清单
+
+- 各项目真实 `workspace_id`。
+- 各迭代真实 `iteration_id`。
+- 各项目任务完成状态枚举。
+- 各项目缺陷关闭状态枚举。
+- TAPD 个人访问令牌是否稳定支持 Bearer。
+- 钉钉最终使用群 Webhook 过渡，还是直接申请企业内部应用机器人。

@@ -1,7 +1,7 @@
 # TAPD 每日复盘链路设计
 
 日期：2026-05-26  
-状态：已确认，进入实现计划前待用户复核  
+状态：已确认，已进入第一版链路脚手架实现
 目标：每天从 TAPD 同步多个项目、多个迭代的任务、缺陷、需求数据，生成一张可直接阅读的人员竖条进度图，并通过钉钉机器人定时发送到群里。
 
 ## 已确认决策
@@ -15,6 +15,9 @@
 - 缺陷按人员展示：已关闭、未解决、新增。
 - 产品经理作为单独角色展示需求排期和需求内容。
 - 主信息必须在一张图内直接可读，点击跳转 TAPD 只作为追详情的辅助路径。
+- 仓库保持扁平结构，正式文件直接放在根目录。
+- 文件名可以使用英文，文档内容、配置注释、代码注释和 commit message 尽量使用中文。
+- TAPD 和钉钉接口落地规则单独沉淀在 `interface-rules.md`。
 
 ## 范围
 
@@ -22,9 +25,21 @@
 
 第一版不依赖 TAPD 页面自动化，不保存用户 TAPD 登录态，不在 HTML 报表中保存 TAPD token。系统只使用服务端环境里的访问令牌拉取日报所需数据。
 
+当前脚手架先支持 dry-run：使用 `config.example.yaml` 中的 `sample_data` 生成 HTML、Markdown 和 JSON，确保配置、聚合和展示链路可验证。真实 TAPD 接口字段确认后，再用 API 返回数据替换 `sample_data`。
+
+接口接入规则：
+
+- TAPD 鉴权优先使用 `Authorization: Bearer ${TAPD_ACCESS_TOKEN}`。
+- TAPD 列表接口统一按 `limit=200&page=N` 翻页。
+- TAPD 响应 `status = 1` 才算成功，失败时使用 `info` 输出错误原因。
+- 任务归属字段默认 `owner`。
+- 缺陷归属字段默认 `current_owner`，用于展示当前处理压力。
+- 产品经理需求字段默认 `owner`。
+- 钉钉首版使用群自定义机器人 Webhook，发送层保留未来切换应用机器人的适配边界。
+
 ## 配置
 
-配置文件建议为 `projects.yaml`：
+配置文件建议开发阶段使用 `config.example.yaml`，真实部署时复制为 `config.yaml`：
 
 ```yaml
 timezone: Asia/Shanghai

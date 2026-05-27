@@ -1,0 +1,91 @@
+timezone: Asia/Shanghai
+
+tapd:
+  base_url: https://api.tapd.cn
+  auth_mode: bearer
+  task_done_statuses:
+    - done
+    - 已完成
+    - 已关闭
+  bug_closed_statuses:
+    - 已解决
+    - 已关闭
+    - 无需解决
+  fields:
+    task_owner: owner
+    bug_owner: current_owner
+    story_pm: owner
+
+report:
+  public_base_url: https://tapd-daily.internal.example.com
+  output_dir: ./public/reports
+
+dingtalk:
+  notifier: webhook
+  webhook: ${DINGTALK_WEBHOOK}
+  secret: ${DINGTALK_SECRET}
+  at_mobiles: []
+  is_at_all: false
+
+projects:
+  - name: 示例项目
+    workspace_id: "33002756"
+    iterations:
+      - name: 2026-05 Sprint
+        iteration_id: "sprint-1"
+    members:
+      - name: 张三
+        tapd_user: zhangsan
+        role: dev
+        tapd_report_url: https://tapd.cn/member/zhangsan
+      - name: 李四
+        tapd_user: lisi
+        role: test
+        tapd_report_url: https://tapd.cn/member/lisi
+    product_managers:
+      - name: 产品A
+        tapd_user: product_a
+
+# dry-run 示例数据只用于本地验证链路，接入真实 TAPD 后可以删除。
+sample_data:
+  tasks:
+    - workspace_id: "33002756"
+      iteration_id: sprint-1
+      owner: zhangsan
+      status: 已完成
+      title: 完成日报页面
+    - workspace_id: "33002756"
+      iteration_id: sprint-1
+      owner: zhangsan
+      status: 开发中
+      title: 接入 TAPD API
+    - workspace_id: "33002756"
+      iteration_id: sprint-1
+      owner: lisi
+      status: 已关闭
+      title: 验证日报输出
+  bugs:
+    - workspace_id: "33002756"
+      iteration_id: sprint-1
+      current_owner: zhangsan
+      status: 已关闭
+      created: "2026-05-26 10:30:00"
+    - workspace_id: "33002756"
+      iteration_id: sprint-1
+      current_owner: zhangsan
+      status: 处理中
+      created: "2026-05-26 11:30:00"
+    - workspace_id: "33002756"
+      iteration_id: sprint-1
+      current_owner: lisi
+      status: 处理中
+      created: "2026-05-25 18:30:00"
+  stories:
+    - workspace_id: "33002756"
+      iteration_id: sprint-1
+      owner: product_a
+      name: 配置化日报范围
+      status: 规划中
+      begin: "2026-05-25"
+      due: "2026-05-29"
+      url: https://tapd.cn/story/1
