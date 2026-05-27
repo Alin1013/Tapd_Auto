@@ -84,3 +84,4 @@
 - [x] 新增 `pyproject.toml`，支持 `pip install -e .` 和 `tapd-daily` 命令。
 - [x] 新增 `.env.example`、`scripts/run_daily.sh` 和 `scripts/crontab.example`。
 - [x] 新增 `docs/operations/production-runbook.md`，说明部署、验证、定时任务和回滚。
+- [x] 新增 `scripts/preview.sh` 和预览 URL 测试，用于本地查看生成报表。

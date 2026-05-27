@@ -80,6 +80,18 @@ public/reports/2026-05-26/summary.md
 public/reports/2026-05-26/report.json
 ```
 
+启动本地预览服务：
+
+```bash
+bash scripts/preview.sh
+```
+
+打开：
+
+```text
+http://127.0.0.1:8765/public/reports/2026-05-26/index.html
+```
+
 测试命令：
 
 ```bash

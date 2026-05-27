@@ -6,12 +6,14 @@ from .dingtalk import build_dingtalk_markdown_payload, build_dingtalk_signed_url
 from .report import build_report, normalize_record
 from .render import public_report_url, render_html, render_markdown, write_field_info, write_report, write_summary_png
 from .tapd import TapdClient, collect_live_data, create_tapd_client, extract_tapd_data, join_fields, unwrap_tapd_data
+from .preview import build_local_report_url
 
 __all__ = [
     "TapdClient",
     "build_dingtalk_markdown_payload",
     "build_dingtalk_signed_url",
     "build_report",
+    "build_local_report_url",
     "collect_live_data",
     "create_tapd_client",
     "extract_tapd_data",

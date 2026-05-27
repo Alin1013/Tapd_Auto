@@ -56,6 +56,18 @@ public/reports/YYYY-MM-DD/field-info.json
 
 确认 `summary-1.png` 和 `index.html` 可以通过 `report.public_base_url` 被钉钉客户端访问。
 
+本地预览：
+
+```bash
+bash scripts/preview.sh
+```
+
+默认地址：
+
+```text
+http://127.0.0.1:8765/public/reports/YYYY-MM-DD/index.html
+```
+
 ## 4. 发送钉钉
 
 确认报表 URL 外部可访问后再执行：
