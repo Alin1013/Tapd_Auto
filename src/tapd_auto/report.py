@@ -96,7 +96,8 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
                 bugs_closed = sum(1 for bug in member_bugs if bug_closed_on_day(bug, closed_bug_statuses, report_date))
                 bugs_open = sum(1 for bug in member_bugs if str(bug.get("status", "")) not in closed_bug_statuses)
                 bugs_new = sum(1 for bug in member_bugs if is_same_day(bug.get("created"), report_date))
-                bug_status_counts = summarize_bug_status_counts(member_bugs, bug_status_labels)
+                today_created_bugs = [bug for bug in member_bugs if is_same_day(bug.get("created"), report_date)]
+                bug_status_counts = summarize_bug_status_counts(today_created_bugs, bug_status_labels)
                 hide_bug_metrics = member_hides_bug_metrics(member)
 
                 iteration_task_total += task_total

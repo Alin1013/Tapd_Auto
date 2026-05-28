@@ -307,6 +307,50 @@ class TapdDailyTests(unittest.TestCase):
         self.assertEqual(report["summary"]["bugs_new"], 1)
         self.assertEqual(report["summary"]["bugs_closed"], 1)
 
+    def test_build_report_uses_today_created_bugs_for_status_chart(self):
+        config = td.load_config_from_text(CONFIG_TEXT, env={})
+        raw_data = {
+            "tasks": [],
+            "bugs": [
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001828",
+                    "current_owner": "leiailin",
+                    "status": "in_progress",
+                    "created": "2026-05-26 09:00:00",
+                },
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001828",
+                    "current_owner": "leiailin",
+                    "status": "reopened",
+                    "created": "2026-05-25 09:00:00",
+                },
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001828",
+                    "current_owner": "leiailin",
+                    "status": "closed",
+                    "created": "2026-05-26 10:00:00",
+                    "closed": "2026-05-26 18:00:00",
+                },
+            ],
+            "stories": [],
+        }
+
+        report = td.build_report(config, raw_data, report_date="2026-05-26")
+        leiailin = report["projects"][0]["iterations"][0]["members"][0]
+
+        self.assertEqual(leiailin["bugs_open"], 2)
+        self.assertEqual(leiailin["bugs_new"], 2)
+        self.assertEqual(
+            leiailin["bug_status_counts"],
+            [
+                {"status": "in_progress", "label": "接受/处理", "count": 1},
+                {"status": "closed", "label": "已关闭", "count": 1},
+            ],
+        )
+
     def test_build_report_excludes_hidden_bug_members_from_defect_summary(self):
         config_text = CONFIG_TEXT.replace(
             "      - name: 雷艾琳\n        tapd_user: leiailin\n        role: 当前账号",
