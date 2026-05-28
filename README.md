@@ -165,7 +165,7 @@ cron 示例见 `scripts/crontab.example`。
 
 ## 后续需要补充的信息
 
-- 成员角色、详情链接和手机号；填写成员 `dingtalk_mobile` 后，钉钉会真实 @ 到对应人员。
+- 成员角色和详情链接。
 - 是否需要把产品经理配置从团队成员中单独拆出来。
 - 如后续新增项目，需要补充对应 `workspace_id`；live 模式会自动发现打开迭代，dry-run 示例才需要补 `iteration_id`。
 
@@ -189,4 +189,4 @@ cron 示例见 `scripts/crontab.example`。
 5. 按人员聚合今日缺陷，日报展示未解决、今日新增、当日关闭；任务数据保留采集但页面和通知不展示任务数、完成率或进展。
 6. 仅保留今天有新增/关闭缺陷或当天产品需求动作的项目迭代，再按迭代卡片展示今日缺陷和当前迭代全部未发布“产品总需求”。
 7. 输出 PNG、HTML、Markdown 和 JSON。
-8. 只有传入 `--send-dingtalk` 时才生成页面截图并发送钉钉 Markdown；推送开头使用 `page-screenshot.png`，中段按成员输出复盘解析并在段落开头 @。
+8. 只有传入 `--send-dingtalk` 时才生成页面截图并发送钉钉 Markdown；推送开头使用 `page-screenshot.png`，中段按成员输出复盘解析并用姓名作为段落前缀。

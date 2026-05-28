@@ -590,7 +590,7 @@ class TapdDailyTests(unittest.TestCase):
         self.assertNotIn("任务整体完成率", markdown)
         self.assertIn("今日缺陷：未解决 1，今日新增 2，当日关闭 1", markdown)
 
-    def test_render_dingtalk_markdown_starts_with_page_screenshot_and_member_mentions(self):
+    def test_render_dingtalk_markdown_starts_with_page_screenshot_and_member_names(self):
         report = {
             "date": "2026-05-26",
             "timezone": "Asia/Shanghai",
@@ -626,7 +626,6 @@ class TapdDailyTests(unittest.TestCase):
                                     "tapd_user": "leiailin",
                                     "role": "当前账号",
                                     "tapd_report_url": "",
-                                    "dingtalk_mobile": "13800138000",
                                     "hide_bug_metrics": False,
                                     "bugs_open": 1,
                                     "bugs_new": 2,
@@ -637,7 +636,6 @@ class TapdDailyTests(unittest.TestCase):
                                     "tapd_user": "陈银",
                                     "role": "团队成员",
                                     "tapd_report_url": "",
-                                    "dingtalk_mobile": "",
                                     "hide_bug_metrics": False,
                                     "bugs_open": 1,
                                     "bugs_new": 1,
@@ -657,22 +655,11 @@ class TapdDailyTests(unittest.TestCase):
         )
 
         self.assertLess(markdown.index("![当日复盘截图]"), markdown.index("今日统计"))
-        self.assertIn("@13800138000 雷艾琳：", markdown)
-        self.assertIn("@陈银 陈银：", markdown)
+        self.assertIn("雷艾琳：", markdown)
+        self.assertIn("陈银：", markdown)
+        self.assertNotIn("@", markdown)
         self.assertIn("Deepexi Foil / Deepexi Foil V1.0.0", markdown)
         self.assertNotIn("任务整体完成率", markdown)
-
-    def test_build_report_keeps_member_dingtalk_mobile_for_mentions(self):
-        config_text = CONFIG_TEXT.replace(
-            "        tapd_user: leiailin\n        role: 当前账号",
-            "        tapd_user: leiailin\n        role: 当前账号\n        dingtalk_mobile: \"13800138000\"",
-        )
-        config = td.load_config_from_text(config_text, env={})
-        report = td.build_report(config, RAW_DATA, report_date="2026-05-26")
-
-        member = report["projects"][0]["iterations"][0]["members"][0]
-
-        self.assertEqual(member["dingtalk_mobile"], "13800138000")
 
     def test_render_html_contains_team_defect_table(self):
         config = td.load_config_from_text(CONFIG_TEXT, env={})
@@ -1504,8 +1491,9 @@ class TapdDailyTests(unittest.TestCase):
         self.assertIn("sign=", post_url)
         self.assertEqual(payload["msgtype"], "markdown")
         self.assertEqual(payload["markdown"]["title"], "TAPD 每日复盘 2026-05-26")
-        self.assertEqual(payload["at"]["atMobiles"], ["13800138000", "13900139000"])
-        self.assertIn("@13900139000 雷艾琳：", payload["markdown"]["text"])
+        self.assertEqual(payload["at"]["atMobiles"], ["13800138000"])
+        self.assertIn("雷艾琳：", payload["markdown"]["text"])
+        self.assertNotIn("@13900139000", payload["markdown"]["text"])
 
 
 if __name__ == "__main__":

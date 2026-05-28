@@ -82,7 +82,6 @@ def render_member_review_lines(report: dict[str, Any]) -> list[str]:
                     key,
                     {
                         "name": member.get("name", key),
-                        "dingtalk_mobile": member.get("dingtalk_mobile", ""),
                         "bugs_open": 0,
                         "bugs_new": 0,
                         "bugs_closed": 0,
@@ -94,15 +93,11 @@ def render_member_review_lines(report: dict[str, Any]) -> list[str]:
                 review["bugs_closed"] += int(member.get("bugs_closed", 0))
                 if scope_name and scope_name not in review["scopes"]:
                     review["scopes"].append(scope_name)
-                if not review["dingtalk_mobile"] and member.get("dingtalk_mobile"):
-                    review["dingtalk_mobile"] = member.get("dingtalk_mobile")
     return [format_member_review(review) for review in reviews.values()]
 
 
 def format_member_review(review: dict[str, Any]) -> str:
     name = str(review["name"])
-    mobile = str(review.get("dingtalk_mobile", "")).strip()
-    mention = f"@{mobile}" if mobile else f"@{name}"
     scope = "、".join(review.get("scopes", [])) or "当前范围"
     bugs_open = int(review.get("bugs_open", 0))
     bugs_new = int(review.get("bugs_new", 0))
@@ -114,7 +109,7 @@ def format_member_review(review: dict[str, Any]) -> str:
     else:
         analysis = "当前范围内暂无缺陷压力。"
     return (
-        f"{mention} {name}：{scope}，未解决 {bugs_open}，今日新增 {bugs_new}，"
+        f"{name}：{scope}，未解决 {bugs_open}，今日新增 {bugs_new}，"
         f"当日关闭 {bugs_closed}。{analysis}"
     )
 

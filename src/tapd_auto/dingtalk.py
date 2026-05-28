@@ -80,10 +80,6 @@ def collect_dingtalk_at_mobiles(config: dict[str, Any], report: dict[str, Any]) 
     mobiles: list[str] = []
     for mobile in config.get("dingtalk", {}).get("at_mobiles", []):
         append_unique_mobile(mobiles, mobile)
-    for project in report.get("projects", []):
-        for iteration in project.get("iterations", []):
-            for member in iteration.get("members", []):
-                append_unique_mobile(mobiles, member.get("dingtalk_mobile", ""))
     return mobiles
 
 

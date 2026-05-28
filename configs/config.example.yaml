@@ -84,12 +84,9 @@ projects:
         tapd_user: leiailin
         role: 当前账号
         tapd_report_url: https://www.tapd.cn/33002756/prong/stories/stories_list
-        # 填手机号后，钉钉 Markdown 会在成员段落开头真实 @ 对应人员。
-        dingtalk_mobile: ""
       - name: 陈银
         tapd_user: 陈银
         role: 团队成员
-        dingtalk_mobile: ""
       - name: 买年顺
         tapd_user: mainianshun
         role: 团队成员
@@ -111,7 +108,6 @@ projects:
       - name: 符叶茜
         tapd_user: fuyexi
         role: 团队成员
-        dingtalk_mobile: ""
       - name: 粘琼月
         tapd_user: nianqiongyue
         role: 团队成员
