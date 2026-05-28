@@ -159,7 +159,7 @@ cron 示例见 `scripts/crontab.example`。
 - 当前真实项目：Deepexi Foil，`workspace_id=33002756`。
 - 示例配置迭代：Deepexi Foil V1.0.0，`iteration_id=1133002756001001828`；live 模式会自动遍历项目下的打开迭代。
 - 当前团队成员已按截图名单同步到配置，映射见 `docs/operations/account-sync.md`；陈银在 TAPD 中的 user 为 `陈银`。
-- 当前页面展示范围由项目下的 `report_scope` 控制，已先收窄为雷艾琳、陈银、符叶茜和 V1.0.0。
+- 当前页面展示范围由项目下的 `report_scope` 控制，已先收窄为雷艾琳、陈银、符叶茜和 Deepexi Foil V1.0.0。
 - 本地真实运行配置在 `configs/config.yaml`，该文件不提交到 Git。
 
 ## 后续需要补充的信息

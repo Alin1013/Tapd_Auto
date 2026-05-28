@@ -390,7 +390,7 @@ class TapdDailyTests(unittest.TestCase):
         config_text = CONFIG_TEXT.replace(
             "    iterations:\n      - name: Deepexi Foil V1.0.0\n        iteration_id: \"1133002756001001828\"",
             "    report_scope:\n      member_names:\n        - 雷艾琳\n        - 陈银\n        - 符叶茜\n"
-            "      iteration_names:\n        - V1.0.0\n"
+            "      iteration_names:\n        - Deepexi Foil V1.0.0\n"
             "    iterations:\n      - name: Deepexi Foil V1.0.0\n        iteration_id: \"1133002756001001828\"\n"
             "      - name: Deepexi Foil V1.1.0\n        iteration_id: \"1133002756001001869\"",
         ).replace(
@@ -1338,7 +1338,7 @@ class TapdDailyTests(unittest.TestCase):
         config = td.load_config_from_text(
             CONFIG_TEXT.replace(
                 "    workspace_id: \"33002756\"",
-                "    workspace_id: \"33002756\"\n    report_scope:\n      iteration_names:\n        - V1.0.0",
+                "    workspace_id: \"33002756\"\n    report_scope:\n      iteration_names:\n        - Deepexi Foil V1.0.0",
             ),
             env={},
         )
