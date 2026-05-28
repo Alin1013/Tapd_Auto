@@ -246,12 +246,20 @@ def render_html(report: dict[str, Any]) -> str:
     th {{ color: #475467; background: #f8fafb; font-weight: 700; }}
     tbody tr:hover {{ background: #f9fbfd; }}
     .member-name {{ font-weight: 700; color: #111827; }}
-    .role {{ color: #667085; font-size: 12px; margin-top: 2px; }}
+    .member-profile {{ display: flex; flex-wrap: wrap; gap: 4px 8px; color: #667085; font-size: 12px; margin-top: 4px; line-height: 1.35; }}
+    .member-profile span {{ white-space: normal; }}
     .pill {{ display: inline-flex; align-items: center; min-height: 24px; padding: 3px 8px; border-radius: 999px; font-size: 12px; margin-right: 5px; border: 1px solid transparent; }}
     .pill-ok {{ color: #176b43; background: #eaf7ef; border-color: #c7ead2; }}
     .pill-warn {{ color: #a23b26; background: #fff1e8; border-color: #ffd5bd; }}
     .pill-info {{ color: #315a94; background: #eef5ff; border-color: #d4e6ff; }}
     .pill-muted {{ color: #667085; background: #f2f4f7; border-color: #d0d5dd; }}
+    .status-bars {{ display: grid; gap: 7px; min-width: 240px; margin-top: 10px; }}
+    .status-row {{ display: grid; grid-template-columns: minmax(74px, 104px) minmax(96px, 1fr) 28px; align-items: center; gap: 8px; }}
+    .status-label {{ color: #475467; font-size: 12px; white-space: normal; line-height: 1.25; }}
+    .status-track {{ height: 10px; border-radius: 999px; background: #eef2f7; overflow: hidden; }}
+    .status-fill {{ display: block; height: 100%; min-width: 4px; border-radius: 999px; }}
+    .status-count {{ color: #334155; font-size: 12px; text-align: right; }}
+    .status-empty {{ margin-top: 10px; color: #667085; font-size: 12px; }}
     .empty {{ margin: 12px 0 0; padding: 14px; border: 1px dashed #ccd6e0; border-radius: 8px; color: #667085; background: #fbfcfd; }}
     a {{ color: #1769c2; text-decoration: none; }}
     a:hover {{ text-decoration: underline; }}
@@ -411,24 +419,62 @@ def render_member_table(members: list[dict[str, Any]]) -> str:
 
 def render_member_row(member: dict[str, Any]) -> str:
     name = html.escape(member["name"])
-    role = html.escape(member.get("role", "") or "团队成员")
-    link_start = f'<a href="{html.escape(member["tapd_report_url"])}" target="_blank" rel="noreferrer">' if member["tapd_report_url"] else ""
-    link_end = "</a>" if member["tapd_report_url"] else ""
+    tapd_report_url = str(member.get("tapd_report_url", "") or "")
+    link_start = f'<a href="{html.escape(tapd_report_url)}" target="_blank" rel="noreferrer">' if tapd_report_url else ""
+    link_end = "</a>" if tapd_report_url else ""
+    profile = render_member_profile(member)
     bug_metrics = render_member_bug_metrics(member)
     return f"""<tr>
-  <td><div class="member-name">{link_start}{name}{link_end}</div><div class="role">{role}</div></td>
+  <td><div class="member-name">{link_start}{name}{link_end}</div>{profile}</td>
   <td>{bug_metrics}</td>
 </tr>"""
+
+
+def render_member_profile(member: dict[str, Any]) -> str:
+    role = str(member.get("role", "") or "团队成员")
+    tapd_user = str(member.get("tapd_user", "") or "-")
+    parts = [
+        f"个人信息：{role}",
+        f"TAPD：{tapd_user}",
+    ]
+    return '<div class="member-profile">' + "".join(f"<span>{html.escape(part)}</span>" for part in parts) + "</div>"
 
 
 def render_member_bug_metrics(member: dict[str, Any]) -> str:
     if member_bug_metrics_hidden(member):
         return ""
-    return (
+    metrics = (
         f'<span class="pill pill-warn">未解 {member["bugs_open"]}</span>'
         f'<span class="pill pill-info">新增 {member["bugs_new"]}</span>'
         f'<span class="pill pill-ok">当日关闭 {member["bugs_closed"]}</span>'
     )
+    return metrics + render_member_status_bars(member)
+
+
+def render_member_status_bars(member: dict[str, Any]) -> str:
+    status_counts = list(member.get("bug_status_counts") or [])
+    if not status_counts:
+        return '<div class="status-empty">暂无缺陷状态，全部为 0</div>'
+    total = sum(int(item.get("count", 0)) for item in status_counts) or 1
+    rows = []
+    for index, item in enumerate(status_counts):
+        count = int(item.get("count", 0))
+        label = str(item.get("label") or item.get("status") or "未设置")
+        width = max(4, round(count / total * 100)) if count else 0
+        color = status_bar_color(index)
+        rows.append(
+            f"""<div class="status-row">
+  <span class="status-label">{html.escape(label)}</span>
+  <span class="status-track"><span class="status-fill" style="width: {width}%; background: {color};"></span></span>
+  <span class="status-count">{count}</span>
+</div>"""
+        )
+    return '<div class="status-bars">' + "\n".join(rows) + "</div>"
+
+
+def status_bar_color(index: int) -> str:
+    colors = ["#d94f44", "#2f80ed", "#2f9e6f", "#b7791f", "#7c3aed", "#0f766e", "#c2410c"]
+    return colors[index % len(colors)]
 
 
 def member_bug_metrics_hidden(member: dict[str, Any]) -> bool:

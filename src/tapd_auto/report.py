@@ -38,6 +38,7 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
     closed_bug_statuses = tapd_rules["bug_closed_statuses"]
     fields = tapd_rules["fields"]
     status_labels = tapd_rules["status_labels"]
+    bug_status_labels = status_labels.get("bugs", {})
     normalized_data = {
         data_type: [normalize_record(item) for item in items]
         for data_type, items in raw_data.items()
@@ -95,6 +96,7 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
                 bugs_closed = sum(1 for bug in member_bugs if bug_closed_on_day(bug, closed_bug_statuses, report_date))
                 bugs_open = sum(1 for bug in member_bugs if str(bug.get("status", "")) not in closed_bug_statuses)
                 bugs_new = sum(1 for bug in member_bugs if is_same_day(bug.get("created"), report_date))
+                bug_status_counts = summarize_bug_status_counts(member_bugs, bug_status_labels)
                 hide_bug_metrics = member_hides_bug_metrics(member)
 
                 iteration_task_total += task_total
@@ -118,6 +120,7 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
                         "bugs_closed": bugs_closed,
                         "bugs_open": bugs_open,
                         "bugs_new": bugs_new,
+                        "bug_status_counts": bug_status_counts,
                     }
                 )
 
@@ -133,7 +136,7 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
             active_product_requirements = [
                 requirement for requirement in product_requirements if requirement_active_on_day(requirement, report_date)
             ]
-            if not iteration_has_daily_activity(iteration_summary, active_product_requirements):
+            if not iteration_has_daily_activity(iteration_summary, active_product_requirements) and not iteration_scope_is_explicit(project):
                 continue
 
             summary["task_total"] += iteration_task_total
@@ -213,6 +216,30 @@ def build_product_requirements(requirements: list[dict[str, Any]]) -> list[dict[
 
 def iteration_has_daily_activity(summary: dict[str, int], product_requirements: list[dict[str, Any]]) -> bool:
     return any(int(summary[key]) > 0 for key in ["bugs_closed", "bugs_new"]) or bool(product_requirements)
+
+
+def iteration_scope_is_explicit(project: dict[str, Any]) -> bool:
+    scope = project.get("report_scope") or {}
+    return bool(scope.get("iteration_names") or scope.get("iteration_ids"))
+
+
+def summarize_bug_status_counts(bugs: list[dict[str, Any]], status_labels: dict[str, str]) -> list[dict[str, Any]]:
+    counts: dict[str, int] = {}
+    order: list[str] = []
+    for bug in bugs:
+        status = str(bug.get("v_status") or bug.get("status") or "未设置").strip() or "未设置"
+        if status not in counts:
+            order.append(status)
+            counts[status] = 0
+        counts[status] += 1
+    return [
+        {
+            "status": status,
+            "label": status_labels.get(status, status),
+            "count": counts[status],
+        }
+        for status in order
+    ]
 
 
 def normalize_record(item: dict[str, Any]) -> dict[str, Any]:

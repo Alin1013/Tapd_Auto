@@ -36,6 +36,10 @@ tapd:
     bug_owner: current_owner
     story_pm: owner
   status_labels:
+    bugs:
+      closed: 已关闭
+      in_progress: 接受/处理
+      reopened: 重新打开
     stories:
       status_17: 已提测
       status_21: 发布
@@ -153,6 +157,13 @@ class TapdDailyTests(unittest.TestCase):
         self.assertEqual(leiailin["bugs_closed"], 1)
         self.assertEqual(leiailin["bugs_open"], 1)
         self.assertEqual(leiailin["bugs_new"], 2)
+        self.assertEqual(
+            leiailin["bug_status_counts"],
+            [
+                {"status": "closed", "label": "已关闭", "count": 1},
+                {"status": "in_progress", "label": "接受/处理", "count": 1},
+            ],
+        )
         self.assertEqual(iteration["requirements"][0]["title"], "真实配置同步范围")
 
     def test_build_report_accepts_tapd_wrapped_api_records(self):
@@ -527,6 +538,27 @@ class TapdDailyTests(unittest.TestCase):
         self.assertEqual([project["name"] for project in report["projects"]], ["今日项目"])
         self.assertEqual(report["projects"][0]["iterations"][0]["name"], "今日迭代")
 
+    def test_build_report_keeps_explicit_iteration_scope_with_zero_member_activity(self):
+        config = td.load_config_from_text(
+            CONFIG_TEXT.replace(
+                "    workspace_id: \"33002756\"",
+                "    workspace_id: \"33002756\"\n    report_scope:\n      iteration_names:\n        - Deepexi Foil V1.0.0",
+            ),
+            env={},
+        )
+        report = td.build_report(config, {"tasks": [], "bugs": [], "stories": []}, report_date="2026-05-26")
+
+        self.assertEqual(report["summary"]["project_count"], 1)
+        self.assertEqual(report["summary"]["iteration_count"], 1)
+        self.assertEqual(report["summary"]["member_count"], 1)
+        self.assertEqual(report["summary"]["bugs_open"], 0)
+        iteration = report["projects"][0]["iterations"][0]
+        self.assertEqual(iteration["name"], "Deepexi Foil V1.0.0")
+        self.assertEqual(iteration["summary"], {"member_count": 1, "bugs_closed": 0, "bugs_open": 0, "bugs_new": 0})
+        self.assertEqual(iteration["members"][0]["name"], "雷艾琳")
+        self.assertEqual(iteration["members"][0]["bugs_open"], 0)
+        self.assertEqual(iteration["members"][0]["bug_status_counts"], [])
+
     def test_build_report_keeps_all_unpublished_requirements_for_active_iteration(self):
         config_text = CONFIG_TEXT.replace(
             "    product_managers:\n      - name: 雷艾琳\n        tapd_user: leiailin",
@@ -678,8 +710,65 @@ class TapdDailyTests(unittest.TestCase):
         self.assertNotIn("任务总数", html)
         self.assertNotIn("任务完成率", html)
         self.assertIn("雷艾琳", html)
+        self.assertIn("个人信息", html)
+        self.assertIn("接受/处理", html)
+        self.assertIn('class="status-bars"', html)
         self.assertNotIn("workspace_id:", html)
         self.assertNotIn("iteration_id:", html)
+
+    def test_render_html_shows_zero_members_and_empty_status_chart(self):
+        report = {
+            "date": "2026-05-26",
+            "timezone": "Asia/Shanghai",
+            "summary": {
+                "project_count": 1,
+                "iteration_count": 1,
+                "member_count": 1,
+                "task_total": 0,
+                "task_done": 0,
+                "task_completion_rate": 0,
+                "bugs_closed": 0,
+                "bugs_open": 0,
+                "bugs_new": 0,
+            },
+            "projects": [
+                {
+                    "name": "Deepexi Foil",
+                    "workspace_id": "33002756",
+                    "iterations": [
+                        {
+                            "name": "Deepexi Foil V1.0.0",
+                            "iteration_id": "i1",
+                            "summary": {"member_count": 1, "bugs_open": 0, "bugs_new": 0, "bugs_closed": 0},
+                            "requirements": [],
+                            "product_requirements": [],
+                            "members": [
+                                {
+                                    "name": "雷艾琳",
+                                    "tapd_user": "leiailin",
+                                    "role": "当前账号",
+                                    "tapd_report_url": "",
+                                    "hide_bug_metrics": False,
+                                    "bugs_open": 0,
+                                    "bugs_new": 0,
+                                    "bugs_closed": 0,
+                                    "bug_status_counts": [],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+
+        html = td.render_html(report)
+
+        self.assertIn("雷艾琳", html)
+        self.assertIn("TAPD：leiailin", html)
+        self.assertIn("未解 0", html)
+        self.assertIn("新增 0", html)
+        self.assertIn("当日关闭 0", html)
+        self.assertIn("暂无缺陷状态，全部为 0", html)
 
     def test_render_html_top_summary_includes_project_and_iteration_names(self):
         report = {
