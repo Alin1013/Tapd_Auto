@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .scope import scoped_project_iterations, scoped_project_members
+
 
 DEFAULT_DONE_TASK_STATUSES = {"done", "已完成", "已关闭", "完成", "关闭", "Done", "Closed"}
 DEFAULT_CLOSED_BUG_STATUSES = {
@@ -63,7 +65,7 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
         }
         product_managers = {pm["tapd_user"]: pm["name"] for pm in project.get("product_managers", [])}
 
-        for iteration in project["iterations"]:
+        for iteration in scoped_project_iterations(project, project["iterations"]):
             member_results = []
             iteration_task_total = 0
             iteration_task_done = 0
@@ -74,7 +76,7 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
                 "bugs_new": 0,
             }
 
-            for member in project["members"]:
+            for member in scoped_project_members(project):
                 user = member["tapd_user"]
 
                 member_tasks = [

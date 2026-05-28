@@ -69,6 +69,13 @@ dingtalk:
 projects:
   - name: Deepexi Foil
     workspace_id: "33002756"
+    report_scope:
+      member_names:
+        - 雷艾琳
+        - 陈银
+        - 符叶茜
+      iteration_names:
+        - V1.0.0
     iterations:
       - name: Deepexi Foil V1.0.0
         iteration_id: "1133002756001001828"
@@ -77,6 +84,9 @@ projects:
         tapd_user: leiailin
         role: 当前账号
         tapd_report_url: https://www.tapd.cn/33002756/prong/stories/stories_list
+      - name: 陈银
+        tapd_user: 陈银
+        role: 团队成员
       - name: 买年顺
         tapd_user: mainianshun
         role: 团队成员
@@ -116,6 +126,8 @@ projects:
     product_managers:
       - name: 雷艾琳
         tapd_user: leiailin
+      - name: 陈银
+        tapd_user: 陈银
       - name: 买年顺
         tapd_user: mainianshun
       - name: 董超

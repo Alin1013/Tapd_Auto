@@ -158,7 +158,8 @@ cron 示例见 `scripts/crontab.example`。
 - 当前 TAPD 账号：`leiailin` / 雷艾琳。
 - 当前真实项目：Deepexi Foil，`workspace_id=33002756`。
 - 示例配置迭代：Deepexi Foil V1.0.0，`iteration_id=1133002756001001828`；live 模式会自动遍历项目下的打开迭代。
-- 当前团队成员已按截图名单同步到配置，映射见 `docs/operations/account-sync.md`。
+- 当前团队成员已按截图名单同步到配置，映射见 `docs/operations/account-sync.md`；陈银在 TAPD 中的 user 为 `陈银`。
+- 当前页面展示范围由项目下的 `report_scope` 控制，已先收窄为雷艾琳、陈银、符叶茜和 V1.0.0。
 - 本地真实运行配置在 `configs/config.yaml`，该文件不提交到 Git。
 
 ## 后续需要补充的信息
@@ -182,7 +183,7 @@ cron 示例见 `scripts/crontab.example`。
 ## 当前链路
 
 1. 从 `.env` 读取 TAPD token 和钉钉敏感配置。
-2. 从配置文件读取项目、成员、字段映射和状态映射；live 模式会自动遍历项目下的打开迭代。
+2. 从配置文件读取项目、成员、字段映射、状态映射和 `report_scope` 展示范围；live 模式会自动遍历项目下的打开迭代，再按范围收窄。
 3. dry-run 模式使用 `sample_data`；live 模式调用 TAPD OpenAPI。
 4. live 模式先拉字段发现信息，再拉迭代、任务、缺陷、需求列表。
 5. 按人员聚合今日缺陷，日报展示未解决、今日新增、当日关闭；任务数据保留采集但页面和通知不展示任务数、完成率或进展。

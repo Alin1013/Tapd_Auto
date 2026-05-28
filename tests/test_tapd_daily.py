@@ -386,6 +386,76 @@ class TapdDailyTests(unittest.TestCase):
         self.assertEqual(iterations[1]["summary"]["bugs_closed"], 1)
         self.assertEqual(iterations[1]["product_requirements"][0]["title"], "V1.1 产品总需求")
 
+    def test_build_report_applies_project_report_scope_to_members_and_iterations(self):
+        config_text = CONFIG_TEXT.replace(
+            "    iterations:\n      - name: Deepexi Foil V1.0.0\n        iteration_id: \"1133002756001001828\"",
+            "    report_scope:\n      member_names:\n        - 雷艾琳\n        - 陈银\n        - 符叶茜\n"
+            "      iteration_names:\n        - V1.0.0\n"
+            "    iterations:\n      - name: Deepexi Foil V1.0.0\n        iteration_id: \"1133002756001001828\"\n"
+            "      - name: Deepexi Foil V1.1.0\n        iteration_id: \"1133002756001001869\"",
+        ).replace(
+            "    product_managers:\n      - name: 雷艾琳\n        tapd_user: leiailin",
+            "      - name: 陈银\n        tapd_user: 陈银\n        role: 团队成员\n"
+            "      - name: 符叶茜\n        tapd_user: fuyexi\n        role: 团队成员\n"
+            "      - name: 董超\n        tapd_user: dongchao\n        role: 团队成员\n"
+            "    product_managers:\n      - name: 雷艾琳\n        tapd_user: leiailin",
+        )
+        config = td.load_config_from_text(config_text, env={})
+        raw_data = {
+            "tasks": [],
+            "bugs": [
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001828",
+                    "current_owner": "leiailin",
+                    "status": "in_progress",
+                    "created": "2026-05-26 09:00:00",
+                },
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001828",
+                    "current_owner": "陈银",
+                    "status": "in_progress",
+                    "created": "2026-05-26 10:00:00",
+                },
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001828",
+                    "current_owner": "fuyexi",
+                    "status": "closed",
+                    "created": "2026-05-25 10:00:00",
+                    "closed": "2026-05-26 18:00:00",
+                },
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001828",
+                    "current_owner": "dongchao",
+                    "status": "in_progress",
+                    "created": "2026-05-26 11:00:00",
+                },
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001869",
+                    "current_owner": "leiailin",
+                    "status": "in_progress",
+                    "created": "2026-05-26 12:00:00",
+                },
+            ],
+            "stories": [],
+        }
+
+        report = td.build_report(config, raw_data, report_date="2026-05-26")
+
+        iterations = report["projects"][0]["iterations"]
+        self.assertEqual([item["name"] for item in iterations], ["Deepexi Foil V1.0.0"])
+        members = iterations[0]["members"]
+        self.assertEqual([member["name"] for member in members], ["雷艾琳", "陈银", "符叶茜"])
+        self.assertEqual(iterations[0]["summary"]["member_count"], 3)
+        self.assertEqual(iterations[0]["summary"]["bugs_new"], 2)
+        self.assertEqual(iterations[0]["summary"]["bugs_closed"], 1)
+        self.assertEqual(report["summary"]["member_count"], 3)
+        self.assertNotIn("董超", td.render_html(report))
+
     def test_build_report_skips_projects_and_iterations_without_daily_activity(self):
         config = {
             "timezone": "Asia/Shanghai",
@@ -1231,6 +1301,60 @@ class TapdDailyTests(unittest.TestCase):
         self.assertEqual(field_info["workspaces"]["33002756"]["bugs"]["path"], "bugs/get_fields_info")
         self.assertEqual(field_info["workspaces"]["33002756"]["stories"]["path"], "stories/get_fields_info")
         self.assertEqual(field_info["workspaces"]["33002756"]["iterations"][0]["name"], "Deepexi Foil V1.0.0")
+        self.assertEqual(field_info["workspaces"]["33002756"]["iterations"][1]["name"], "Deepexi Foil V1.1.0")
+
+    def test_collect_live_data_filters_discovered_iterations_by_report_scope(self):
+        class FakeTapdClient:
+            def __init__(self):
+                self.paginated_calls = []
+
+            def get_json(self, path, params=None):
+                return {"status": 1, "data": {"path": path}}
+
+            def get_paginated(self, path, params=None):
+                self.paginated_calls.append((path, params or {}))
+                if path == "iterations":
+                    return [
+                        {
+                            "workspace_id": "33002756",
+                            "id": "1133002756001001828",
+                            "name": "Deepexi Foil V1.0.0",
+                            "status": "open",
+                        },
+                        {
+                            "workspace_id": "33002756",
+                            "id": "1133002756001001869",
+                            "name": "Deepexi Foil V1.1.0",
+                            "status": "open",
+                        },
+                    ]
+                return [
+                    {
+                        "workspace_id": "33002756",
+                        "iteration_id": (params or {}).get("iteration_id"),
+                    }
+                ]
+
+        config = td.load_config_from_text(
+            CONFIG_TEXT.replace(
+                "    workspace_id: \"33002756\"",
+                "    workspace_id: \"33002756\"\n    report_scope:\n      iteration_names:\n        - V1.0.0",
+            ),
+            env={},
+        )
+        client = FakeTapdClient()
+        raw_data, field_info = td.collect_live_data(config, client)
+
+        self.assertEqual([item["iteration_id"] for item in config["projects"][0]["iterations"]], ["1133002756001001828"])
+        fetched_iteration_ids = [
+            params.get("iteration_id")
+            for path, params in client.paginated_calls
+            if path in {"tasks", "bugs", "stories"}
+        ]
+        self.assertEqual(fetched_iteration_ids, ["1133002756001001828", "1133002756001001828", "1133002756001001828"])
+        self.assertEqual(len(raw_data["tasks"]), 1)
+        self.assertEqual(len(raw_data["bugs"]), 1)
+        self.assertEqual(len(raw_data["stories"]), 1)
         self.assertEqual(field_info["workspaces"]["33002756"]["iterations"][1]["name"], "Deepexi Foil V1.1.0")
 
     def test_send_dingtalk_report_posts_signed_markdown_payload(self):

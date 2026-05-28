@@ -11,6 +11,7 @@ import requests
 
 from .config import merged_env
 from .report import get_tapd_rules, normalize_record
+from .scope import scoped_project_iterations
 
 
 @dataclass
@@ -210,8 +211,8 @@ def discover_project_iterations(project: dict[str, Any], client: TapdClient, wor
     )
     workspace_info["iterations"] = discovered
     if not discovered:
-        return project["iterations"]
-    return [
+        return scoped_project_iterations(project, project["iterations"])
+    iterations = [
         {
             "name": item.get("name") or item.get("title") or str(item.get("id", "")),
             "iteration_id": str(item.get("id") or item.get("iteration_id")),
@@ -222,6 +223,7 @@ def discover_project_iterations(project: dict[str, Any], client: TapdClient, wor
         for item in discovered
         if item.get("id") or item.get("iteration_id")
     ]
+    return scoped_project_iterations(project, iterations)
 
 
 def join_fields(fields: list[str]) -> str:
