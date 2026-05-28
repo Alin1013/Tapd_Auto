@@ -1,3 +1,3 @@
-# 工作日 18:30 生成 TAPD 每日复盘并发送钉钉。
+# 每天 17:00 生成 TAPD 每日复盘、页面截图并发送钉钉。
 # 部署时把 /opt/tapd-auto 替换为实际项目路径。
-30 18 * * 1-5 cd /opt/tapd-auto && /bin/bash scripts/run_daily.sh >> logs/tapd-daily.log 2>&1
+0 17 * * * cd /opt/tapd-auto && /bin/bash scripts/run_daily.sh >> logs/tapd-daily.log 2>&1

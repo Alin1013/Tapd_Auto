@@ -111,6 +111,11 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
                         "tapd_user": user,
                         "role": member.get("role", ""),
                         "tapd_report_url": member.get("tapd_report_url", ""),
+                        "dingtalk_mobile": first_non_empty_text(
+                            member.get("dingtalk_mobile"),
+                            member.get("mobile"),
+                            member.get("phone"),
+                        ),
                         "hide_bug_metrics": hide_bug_metrics,
                         "task_total": task_total,
                         "task_done": task_done,

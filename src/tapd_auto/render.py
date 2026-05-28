@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import html
 import json
+import os
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +37,88 @@ def render_markdown(report: dict[str, Any], report_url: str, image_urls: list[st
     return "\n".join(lines)
 
 
+def render_dingtalk_markdown(report: dict[str, Any], report_url: str, image_urls: list[str] | None = None) -> str:
+    """生成钉钉推送用 Markdown：截图优先，然后按成员输出复盘解析。"""
+
+    summary = report["summary"]
+    lines = [
+        f"### TAPD 每日复盘 {report['date']}",
+        "",
+    ]
+    for image_url in image_urls or []:
+        lines.extend([f"![当日复盘截图]({image_url})", ""])
+    lines.extend(
+        [
+            f"今日统计：{summary['project_count']} 个项目 / {summary['iteration_count']} 个迭代 / {summary['member_count']} 人",
+            f"今日缺陷：未解决 {summary['bugs_open']}，今日新增 {summary['bugs_new']}，当日关闭 {summary['bugs_closed']}",
+            "",
+            f"[查看交互报表]({report_url})",
+            "",
+            "#### 成员复盘",
+            "",
+        ]
+    )
+    member_lines = render_member_review_lines(report)
+    if member_lines:
+        for line in member_lines:
+            lines.extend([line, ""])
+    else:
+        lines.extend(["当前范围内暂无成员复盘数据。", ""])
+    return "\n".join(lines)
+
+
+def render_member_review_lines(report: dict[str, Any]) -> list[str]:
+    reviews: dict[str, dict[str, Any]] = {}
+    for project in report.get("projects", []):
+        for iteration in project.get("iterations", []):
+            scope_name = f"{project.get('name', '')} / {iteration.get('name', '')}".strip(" /")
+            for member in iteration.get("members", []):
+                if member_bug_metrics_hidden(member):
+                    continue
+                key = str(member.get("tapd_user") or member.get("name") or "")
+                if not key:
+                    continue
+                review = reviews.setdefault(
+                    key,
+                    {
+                        "name": member.get("name", key),
+                        "dingtalk_mobile": member.get("dingtalk_mobile", ""),
+                        "bugs_open": 0,
+                        "bugs_new": 0,
+                        "bugs_closed": 0,
+                        "scopes": [],
+                    },
+                )
+                review["bugs_open"] += int(member.get("bugs_open", 0))
+                review["bugs_new"] += int(member.get("bugs_new", 0))
+                review["bugs_closed"] += int(member.get("bugs_closed", 0))
+                if scope_name and scope_name not in review["scopes"]:
+                    review["scopes"].append(scope_name)
+                if not review["dingtalk_mobile"] and member.get("dingtalk_mobile"):
+                    review["dingtalk_mobile"] = member.get("dingtalk_mobile")
+    return [format_member_review(review) for review in reviews.values()]
+
+
+def format_member_review(review: dict[str, Any]) -> str:
+    name = str(review["name"])
+    mobile = str(review.get("dingtalk_mobile", "")).strip()
+    mention = f"@{mobile}" if mobile else f"@{name}"
+    scope = "、".join(review.get("scopes", [])) or "当前范围"
+    bugs_open = int(review.get("bugs_open", 0))
+    bugs_new = int(review.get("bugs_new", 0))
+    bugs_closed = int(review.get("bugs_closed", 0))
+    if bugs_new or bugs_closed:
+        analysis = "今日有缺陷流转，建议优先确认新增问题和关闭质量。"
+    elif bugs_open:
+        analysis = "当前仍有未解决缺陷，需要继续推进处理。"
+    else:
+        analysis = "当前范围内暂无缺陷压力。"
+    return (
+        f"{mention} {name}：{scope}，未解决 {bugs_open}，今日新增 {bugs_new}，"
+        f"当日关闭 {bugs_closed}。{analysis}"
+    )
+
+
 def write_report(report: dict[str, Any], output_root: Path | str, public_base_url: str) -> Path:
     output_dir = Path(output_root) / report["date"]
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -44,6 +130,73 @@ def write_report(report: dict[str, Any], output_root: Path | str, public_base_ur
     (output_dir / "summary.md").write_text(render_markdown(report, report_url, image_urls=[image_url]), encoding="utf-8")
     (output_dir / "index.html").write_text(render_html(report), encoding="utf-8")
     return output_dir
+
+
+def write_page_screenshot(
+    html_path: Path | str,
+    output_dir: Path | str,
+    browser_path: str | None = None,
+    filename: str = "page-screenshot.png",
+    window_size: str = "1280,1800",
+    timeout_seconds: int = 15,
+) -> Path:
+    """用无头浏览器生成 HTML 页面截图。"""
+
+    browser = browser_path or find_browser_path()
+    if not browser:
+        raise RuntimeError("未找到 Chrome/Chromium，无法生成页面实时截图。")
+
+    html_file = Path(html_path).resolve()
+    output_path = Path(output_dir) / filename
+    with tempfile.TemporaryDirectory(prefix="tapd-auto-chrome-") as user_data_dir:
+        command = [
+            browser,
+            "--headless=new",
+            "--disable-gpu",
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-extensions",
+            "--disable-background-networking",
+            "--run-all-compositor-stages-before-draw",
+            "--virtual-time-budget=1000",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--hide-scrollbars",
+            "--allow-file-access-from-files",
+            f"--user-data-dir={user_data_dir}",
+            f"--window-size={window_size}",
+            f"--screenshot={output_path}",
+            html_file.as_uri(),
+        ]
+        try:
+            subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout_seconds)
+        except subprocess.TimeoutExpired:
+            if not output_path.exists():
+                raise
+    if not output_path.exists():
+        raise RuntimeError(f"页面截图生成失败：{output_path}")
+    return output_path
+
+
+def find_browser_path() -> str:
+    env_path = os.environ.get("TAPD_AUTO_BROWSER_PATH", "").strip()
+    if env_path:
+        return env_path
+    candidates = [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+        "google-chrome",
+        "chromium",
+        "chromium-browser",
+    ]
+    for candidate in candidates:
+        candidate_path = Path(candidate)
+        if candidate_path.is_absolute() and candidate_path.exists():
+            return str(candidate_path)
+        resolved = shutil.which(candidate)
+        if resolved:
+            return resolved
+    return ""
 
 
 def write_field_info(field_info: dict[str, Any], output_dir: Path) -> Path:

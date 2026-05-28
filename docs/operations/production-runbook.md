@@ -54,7 +54,7 @@ public/reports/YYYY-MM-DD/report.json
 public/reports/YYYY-MM-DD/field-info.json
 ```
 
-确认 `summary-1.png` 和 `index.html` 可以通过 `report.public_base_url` 被钉钉客户端访问。
+确认 `summary-1.png` 和 `index.html` 可以通过 `report.public_base_url` 被钉钉客户端访问。传入 `--send-dingtalk` 时会额外生成 `page-screenshot.png` 并作为钉钉推送首图。
 
 本地预览：
 
@@ -82,10 +82,11 @@ python3 tapd_daily.py --config configs/config.yaml --live --send-dingtalk
 - `.env` 中的 `DINGTALK_SECRET`
 - 钉钉机器人关键词或加签设置
 - `report.public_base_url` 是否能在手机端访问
+- 服务器是否安装 Chrome/Chromium；页面实时截图依赖无头浏览器，必要时设置 `TAPD_AUTO_BROWSER_PATH`
 
 ## 5. 定时任务
 
-推荐工作日 18:30 发送：
+推荐每天 17:00 发送：
 
 ```bash
 crontab -e
@@ -94,7 +95,7 @@ crontab -e
 写入：
 
 ```text
-30 18 * * 1-5 cd /opt/tapd-auto && /bin/bash scripts/run_daily.sh >> logs/tapd-daily.log 2>&1
+0 17 * * * cd /opt/tapd-auto && /bin/bash scripts/run_daily.sh >> logs/tapd-daily.log 2>&1
 ```
 
 ## 6. 回滚

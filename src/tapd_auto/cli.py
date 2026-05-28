@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from .config import load_config
 from .dingtalk import send_dingtalk_report
 from .report import build_report
-from .render import public_report_url, render_markdown, write_field_info, write_report
+from .render import public_report_asset_url, public_report_url, render_dingtalk_markdown, write_field_info, write_page_screenshot, write_report
 from .tapd import collect_live_data, create_tapd_client
 
 
@@ -62,7 +62,9 @@ def run_cli(argv: list[str] | None = None) -> int:
         field_info_path = write_field_info(field_info, output_dir)
         print(f"TAPD 字段发现结果：{field_info_path}")
     if args.send_dingtalk:
-        markdown = render_markdown(report, report_url, image_urls=[report_url.rsplit("/", 1)[0] + "/summary-1.png"])
+        screenshot_path = write_page_screenshot(output_dir / "index.html", output_dir)
+        image_url = public_report_asset_url(config["report"]["public_base_url"], report["date"], screenshot_path.name)
+        markdown = render_dingtalk_markdown(report, report_url, image_urls=[image_url])
         send_dingtalk_report(config, report, report_url, markdown)
         print("已发送钉钉 Markdown 日报。")
 

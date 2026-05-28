@@ -52,15 +52,15 @@ def send_dingtalk_report(config: dict[str, Any], report: dict[str, Any], report_
     if not webhook:
         raise RuntimeError("缺少 DINGTALK_WEBHOOK，无法发送钉钉日报。")
     if markdown is None:
-        from .render import render_markdown
+        from .render import render_dingtalk_markdown
 
-        image_url = f"{report_url.rsplit('/', 1)[0]}/summary-1.png"
-        markdown = render_markdown(report, report_url, image_urls=[image_url])
+        image_url = f"{report_url.rsplit('/', 1)[0]}/page-screenshot.png"
+        markdown = render_dingtalk_markdown(report, report_url, image_urls=[image_url])
 
     payload = build_dingtalk_markdown_payload(
         title=f"TAPD 每日复盘 {report['date']}",
         markdown=markdown,
-        at_mobiles=dingtalk.get("at_mobiles", []),
+        at_mobiles=collect_dingtalk_at_mobiles(config, report),
         is_at_all=bool(dingtalk.get("is_at_all", False)),
     )
     send_url = build_dingtalk_signed_url(webhook, dingtalk.get("secret", ""))
@@ -74,3 +74,20 @@ def send_dingtalk_report(config: dict[str, Any], report: dict[str, Any], report_
     result = response.json()
     if isinstance(result, dict) and result.get("errcode") not in (None, 0):
         raise RuntimeError(f"钉钉发送失败：{result.get('errmsg', '未知错误')}")
+
+
+def collect_dingtalk_at_mobiles(config: dict[str, Any], report: dict[str, Any]) -> list[str]:
+    mobiles: list[str] = []
+    for mobile in config.get("dingtalk", {}).get("at_mobiles", []):
+        append_unique_mobile(mobiles, mobile)
+    for project in report.get("projects", []):
+        for iteration in project.get("iterations", []):
+            for member in iteration.get("members", []):
+                append_unique_mobile(mobiles, member.get("dingtalk_mobile", ""))
+    return mobiles
+
+
+def append_unique_mobile(mobiles: list[str], value: Any) -> None:
+    mobile = str(value or "").strip()
+    if mobile and mobile not in mobiles:
+        mobiles.append(mobile)

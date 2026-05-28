@@ -2,6 +2,7 @@ import tempfile
 import textwrap
 import unittest
 import sys
+import subprocess
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -588,6 +589,90 @@ class TapdDailyTests(unittest.TestCase):
         self.assertIn("今日统计：1 个项目 / 1 个迭代 / 1 人", markdown)
         self.assertNotIn("任务整体完成率", markdown)
         self.assertIn("今日缺陷：未解决 1，今日新增 2，当日关闭 1", markdown)
+
+    def test_render_dingtalk_markdown_starts_with_page_screenshot_and_member_mentions(self):
+        report = {
+            "date": "2026-05-26",
+            "timezone": "Asia/Shanghai",
+            "summary": {
+                "project_count": 1,
+                "iteration_count": 1,
+                "member_count": 2,
+                "task_total": 0,
+                "task_done": 0,
+                "task_completion_rate": 0,
+                "bugs_closed": 1,
+                "bugs_open": 2,
+                "bugs_new": 3,
+            },
+            "projects": [
+                {
+                    "name": "Deepexi Foil",
+                    "workspace_id": "33002756",
+                    "iterations": [
+                        {
+                            "name": "Deepexi Foil V1.0.0",
+                            "iteration_id": "1133002756001001828",
+                            "summary": {
+                                "member_count": 2,
+                                "bugs_closed": 1,
+                                "bugs_open": 2,
+                                "bugs_new": 3,
+                            },
+                            "product_requirements": [],
+                            "members": [
+                                {
+                                    "name": "雷艾琳",
+                                    "tapd_user": "leiailin",
+                                    "role": "当前账号",
+                                    "tapd_report_url": "",
+                                    "dingtalk_mobile": "13800138000",
+                                    "hide_bug_metrics": False,
+                                    "bugs_open": 1,
+                                    "bugs_new": 2,
+                                    "bugs_closed": 1,
+                                },
+                                {
+                                    "name": "陈银",
+                                    "tapd_user": "陈银",
+                                    "role": "团队成员",
+                                    "tapd_report_url": "",
+                                    "dingtalk_mobile": "",
+                                    "hide_bug_metrics": False,
+                                    "bugs_open": 1,
+                                    "bugs_new": 1,
+                                    "bugs_closed": 0,
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+
+        markdown = td.render_dingtalk_markdown(
+            report,
+            "https://tapd-daily.internal.example.com/reports/2026-05-26/index.html",
+            image_urls=["https://tapd-daily.internal.example.com/reports/2026-05-26/page-screenshot.png"],
+        )
+
+        self.assertLess(markdown.index("![当日复盘截图]"), markdown.index("今日统计"))
+        self.assertIn("@13800138000 雷艾琳：", markdown)
+        self.assertIn("@陈银 陈银：", markdown)
+        self.assertIn("Deepexi Foil / Deepexi Foil V1.0.0", markdown)
+        self.assertNotIn("任务整体完成率", markdown)
+
+    def test_build_report_keeps_member_dingtalk_mobile_for_mentions(self):
+        config_text = CONFIG_TEXT.replace(
+            "        tapd_user: leiailin\n        role: 当前账号",
+            "        tapd_user: leiailin\n        role: 当前账号\n        dingtalk_mobile: \"13800138000\"",
+        )
+        config = td.load_config_from_text(config_text, env={})
+        report = td.build_report(config, RAW_DATA, report_date="2026-05-26")
+
+        member = report["projects"][0]["iterations"][0]["members"][0]
+
+        self.assertEqual(member["dingtalk_mobile"], "13800138000")
 
     def test_render_html_contains_team_defect_table(self):
         config = td.load_config_from_text(CONFIG_TEXT, env={})
@@ -1177,6 +1262,42 @@ class TapdDailyTests(unittest.TestCase):
             self.assertTrue((output_dir / "summary-1.png").read_bytes().startswith(b"\x89PNG"))
             self.assertIn("![日报图]", (output_dir / "summary.md").read_text(encoding="utf-8"))
 
+    def test_write_page_screenshot_uses_headless_browser(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            html_path = output_dir / "index.html"
+            html_path.write_text("<html><body>日报</body></html>", encoding="utf-8")
+
+            def fake_run(command, check, stdout, stderr, timeout):
+                screenshot_arg = next(item for item in command if item.startswith("--screenshot="))
+                Path(screenshot_arg.split("=", 1)[1]).write_bytes(b"\x89PNG\r\n")
+                return Mock(returncode=0)
+
+            with patch("tapd_auto.render.subprocess.run", side_effect=fake_run) as run_mock:
+                screenshot_path = td.write_page_screenshot(html_path, output_dir, browser_path="/Applications/Chrome")
+
+        command = run_mock.call_args.args[0]
+        self.assertEqual(screenshot_path.name, "page-screenshot.png")
+        self.assertIn("--headless=new", command)
+        self.assertIn(html_path.resolve().as_uri(), command)
+
+    def test_write_page_screenshot_accepts_timeout_when_file_was_created(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            html_path = output_dir / "index.html"
+            html_path.write_text("<html><body>日报</body></html>", encoding="utf-8")
+
+            def fake_run(command, check, stdout, stderr, timeout):
+                screenshot_arg = next(item for item in command if item.startswith("--screenshot="))
+                Path(screenshot_arg.split("=", 1)[1]).write_bytes(b"\x89PNG\r\n")
+                raise subprocess.TimeoutExpired(command, timeout)
+
+            with patch("tapd_auto.render.subprocess.run", side_effect=fake_run):
+                screenshot_path = td.write_page_screenshot(html_path, output_dir, browser_path="/Applications/Chrome")
+
+            self.assertEqual(screenshot_path.name, "page-screenshot.png")
+            self.assertTrue(screenshot_path.exists())
+
     def test_tapd_client_validates_api_status_and_reads_paginated_lists(self):
         first_page_items = [{"id": item_id} for item_id in range(200)]
         first_response = Mock()
@@ -1370,6 +1491,9 @@ class TapdDailyTests(unittest.TestCase):
         response.json.return_value = {"errcode": 0, "errmsg": "ok"}
         response.raise_for_status.return_value = None
 
+        config["projects"][0]["members"][0]["dingtalk_mobile"] = "13900139000"
+        report = td.build_report(config, RAW_DATA, report_date="2026-05-26")
+
         with patch("tapd_auto.dingtalk.time.time", return_value=1760000000), patch("tapd_auto.dingtalk.requests.post", return_value=response) as request_post:
             td.send_dingtalk_report(config, report, "https://tapd-daily.internal.example.com/reports/2026-05-26/index.html")
 
@@ -1380,7 +1504,8 @@ class TapdDailyTests(unittest.TestCase):
         self.assertIn("sign=", post_url)
         self.assertEqual(payload["msgtype"], "markdown")
         self.assertEqual(payload["markdown"]["title"], "TAPD 每日复盘 2026-05-26")
-        self.assertEqual(payload["at"]["atMobiles"], ["13800138000"])
+        self.assertEqual(payload["at"]["atMobiles"], ["13800138000", "13900139000"])
+        self.assertIn("@13900139000 雷艾琳：", payload["markdown"]["text"])
 
 
 if __name__ == "__main__":

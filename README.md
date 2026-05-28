@@ -1,6 +1,6 @@
 # TAPD 自动日报
 
-这个项目用于生成 TAPD 每日复盘报表。第一版已经打通本地链路和真实接口边界：读取配置、拉取 TAPD 数据、聚合任务/缺陷/需求、生成 PNG 日报图、HTML 交互报表、Markdown 摘要和 JSON 数据文件。钉钉发送需要显式打开，避免调试时误发群消息。
+这个项目用于生成 TAPD 每日复盘报表。第一版已经打通本地链路和真实接口边界：读取配置、拉取 TAPD 数据、聚合任务/缺陷/需求、生成 PNG 日报图、HTML 交互报表、页面截图、Markdown 摘要和 JSON 数据文件。钉钉发送需要显式打开，避免调试时误发群消息。
 
 ## 目录结构
 
@@ -160,13 +160,13 @@ cron 示例见 `scripts/crontab.example`。
 - 示例配置迭代：Deepexi Foil V1.0.0，`iteration_id=1133002756001001828`；live 模式会自动遍历项目下的打开迭代。
 - 当前团队成员已按截图名单同步到配置，映射见 `docs/operations/account-sync.md`；陈银在 TAPD 中的 user 为 `陈银`。
 - 当前页面展示范围由项目下的 `report_scope` 控制，已先收窄为雷艾琳、陈银、符叶茜和 Deepexi Foil V1.0.0。
+- 钉钉 webhook 和加签已接入本地 `.env`，不会提交到 Git。
 - 本地真实运行配置在 `configs/config.yaml`，该文件不提交到 Git。
 
 ## 后续需要补充的信息
 
-- 成员角色、详情链接和手机号。
+- 成员角色、详情链接和手机号；填写成员 `dingtalk_mobile` 后，钉钉会真实 @ 到对应人员。
 - 是否需要把产品经理配置从团队成员中单独拆出来。
-- 钉钉机器人 webhook 和加签 secret。
 - 如后续新增项目，需要补充对应 `workspace_id`；live 模式会自动发现打开迭代，dry-run 示例才需要补 `iteration_id`。
 
 ## 接口规则
@@ -189,4 +189,4 @@ cron 示例见 `scripts/crontab.example`。
 5. 按人员聚合今日缺陷，日报展示未解决、今日新增、当日关闭；任务数据保留采集但页面和通知不展示任务数、完成率或进展。
 6. 仅保留今天有新增/关闭缺陷或当天产品需求动作的项目迭代，再按迭代卡片展示今日缺陷和当前迭代全部未发布“产品总需求”。
 7. 输出 PNG、HTML、Markdown 和 JSON。
-8. 只有传入 `--send-dingtalk` 时才发送钉钉 Markdown。
+8. 只有传入 `--send-dingtalk` 时才生成页面截图并发送钉钉 Markdown；推送开头使用 `page-screenshot.png`，中段按成员输出复盘解析并在段落开头 @。

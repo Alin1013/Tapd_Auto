@@ -75,6 +75,7 @@ live 模式会按项目自动遍历所有打开迭代，示例配置迭代主要
 - `configs/config.yaml` 是本地真实运行配置，已被 `.gitignore` 忽略，不提交。
 - `configs/config.example.yaml` 保留真实项目、真实团队成员和脱敏 dry-run 数据。
 - TAPD token 只放 `.env` 的 `TAPD_ACCESS_TOKEN`，不得写入文档、配置示例、测试或报表源码。
+- 钉钉 webhook 和加签只放 `.env` 的 `DINGTALK_WEBHOOK`、`DINGTALK_SECRET`，不得写入文档、配置示例、测试或报表源码。
 - 当前页面展示范围使用项目下的 `report_scope` 控制；先限定成员为雷艾琳、陈银、符叶茜，迭代为 Deepexi Foil V1.0.0。
 - live 模式先发现项目下的打开迭代，再逐个迭代同步任务、缺陷和需求；成员不需要处在同一个迭代内。
 - 团队成员日报只展示缺陷口径，不展示任务数、任务完成率或任务进展。
@@ -84,7 +85,7 @@ live 模式会按项目自动遍历所有打开迭代，示例配置迭代主要
 - 已展示迭代内的“产品总需求”保留当前迭代全部未发布需求，并排除发布状态需求。
 - 多迭代页面按迭代卡片纵向滚动展示；同一迭代的今日缺陷和产品总需求放在同一卡片内。
 - 需求 owner 先按同一团队名单筛选，后续可单独拆产品经理配置。
-- 钉钉 webhook 和手机号后续再补充。
+- 成员手机号后续补到 `dingtalk_mobile`，钉钉成员复盘段落才能真实 @ 到个人。
 - 当前项目任务状态：`open` 未开始、`progressing` 进行中、`done` 已完成。
 - 当前项目缺陷关闭类状态：`resolved` 已解决、`verified` 已验证、`rejected` 无需解决、`closed` 已关闭。
 - 当前项目需求状态已写入 `tapd.status_labels.stories`，页面会把 `status_17` 等编码转换成中文；完整字段见 live 运行生成的 `field-info.json`。
