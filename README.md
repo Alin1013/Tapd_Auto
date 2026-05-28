@@ -176,7 +176,7 @@ cron 示例见 `scripts/crontab.example`。
 - TAPD 返回 `status = 1` 才算成功，否则使用 `info` 作为错误原因。
 - TAPD 列表统一使用 `limit=200&page=N` 翻页。
 - 任务归属字段默认 `owner`。
-- 缺陷归属字段默认 `current_owner`。
+- 缺陷未解决/关闭默认按处理人字段 `current_owner`，今日新增默认按创建人字段 `reporter`。
 - 需求产品经理字段默认 `owner`。
 - 钉钉首版使用群自定义机器人 Webhook，开启加签时按 `timestamp + "\n" + secret` 生成 `sign`。
 - 详细规则见 `docs/operations/interface-rules.md`。

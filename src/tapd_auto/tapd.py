@@ -155,7 +155,7 @@ def collect_live_data(config: dict[str, Any], client: TapdClient) -> tuple[dict[
                                 "status",
                                 "v_status",
                                 fields["bug_owner"],
-                                "reporter",
+                                fields["bug_creator"],
                                 "created",
                                 "resolved",
                                 "closed",

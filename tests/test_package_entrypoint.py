@@ -25,6 +25,7 @@ tapd:
   fields:
     task_owner: owner
     bug_owner: current_owner
+    bug_creator: reporter
     story_pm: owner
 
 report:

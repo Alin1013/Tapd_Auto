@@ -34,6 +34,7 @@ tapd:
   fields:
     task_owner: owner
     bug_owner: current_owner
+    bug_creator: reporter
     story_pm: owner
   status_labels:
     bugs:
@@ -350,6 +351,34 @@ class TapdDailyTests(unittest.TestCase):
                 {"status": "closed", "label": "已关闭", "count": 1},
             ],
         )
+
+    def test_build_report_counts_new_bugs_by_creator_not_current_owner(self):
+        config = td.load_config_from_text(CONFIG_TEXT, env={})
+        raw_data = {
+            "tasks": [],
+            "bugs": [
+                {
+                    "workspace_id": "33002756",
+                    "iteration_id": "1133002756001001828",
+                    "current_owner": "someone_else",
+                    "reporter": "leiailin",
+                    "status": "in_progress",
+                    "created": "2026-05-26 09:00:00",
+                }
+            ],
+            "stories": [],
+        }
+
+        report = td.build_report(config, raw_data, report_date="2026-05-26")
+        leiailin = report["projects"][0]["iterations"][0]["members"][0]
+
+        self.assertEqual(leiailin["bugs_open"], 0)
+        self.assertEqual(leiailin["bugs_new"], 1)
+        self.assertEqual(
+            leiailin["bug_status_counts"],
+            [{"status": "in_progress", "label": "接受/处理", "count": 1}],
+        )
+        self.assertEqual(report["summary"]["bugs_new"], 1)
 
     def test_build_report_excludes_hidden_bug_members_from_defect_summary(self):
         config_text = CONFIG_TEXT.replace(

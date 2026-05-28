@@ -26,6 +26,7 @@ DEFAULT_CLOSED_BUG_STATUSES = {
 DEFAULT_TAPD_FIELDS = {
     "task_owner": "owner",
     "bug_owner": "current_owner",
+    "bug_creator": "reporter",
     "story_pm": "owner",
 }
 HIDDEN_BUG_USERS = {"Tora", "nianqiongyue"}
@@ -90,13 +91,18 @@ def build_report(config: dict[str, Any], raw_data: dict[str, list[dict[str, Any]
                     for bug in normalized_data.get("bugs", [])
                     if is_in_scope(bug, project, iteration) and field_matches(bug, fields["bug_owner"], user)
                 ]
+                member_created_bugs = [
+                    bug
+                    for bug in normalized_data.get("bugs", [])
+                    if is_in_scope(bug, project, iteration) and bug_creator_matches(bug, fields["bug_creator"], fields["bug_owner"], user)
+                ]
 
                 task_total = len(member_tasks)
                 task_done = sum(1 for task in member_tasks if str(task.get("status", "")) in done_task_statuses)
                 bugs_closed = sum(1 for bug in member_bugs if bug_closed_on_day(bug, closed_bug_statuses, report_date))
                 bugs_open = sum(1 for bug in member_bugs if str(bug.get("status", "")) not in closed_bug_statuses)
-                bugs_new = sum(1 for bug in member_bugs if is_same_day(bug.get("created"), report_date))
-                today_created_bugs = [bug for bug in member_bugs if is_same_day(bug.get("created"), report_date)]
+                bugs_new = sum(1 for bug in member_created_bugs if is_same_day(bug.get("created"), report_date))
+                today_created_bugs = [bug for bug in member_created_bugs if is_same_day(bug.get("created"), report_date)]
                 bug_status_counts = summarize_bug_status_counts(today_created_bugs, bug_status_labels)
                 hide_bug_metrics = member_hides_bug_metrics(member)
 
@@ -319,6 +325,13 @@ def date_part(value: Any) -> str:
 
 def field_matches(item: dict[str, Any], field_name: str, user: str) -> bool:
     return first_matching_value(item, field_name, {user}) is not None
+
+
+def bug_creator_matches(item: dict[str, Any], creator_field: str, owner_field: str, user: str) -> bool:
+    creator_values = split_people(item.get(creator_field))
+    if creator_values:
+        return user in creator_values
+    return field_matches(item, owner_field, user)
 
 
 def first_matching_value(item: dict[str, Any], field_name: str, users: set[str]) -> str | None:

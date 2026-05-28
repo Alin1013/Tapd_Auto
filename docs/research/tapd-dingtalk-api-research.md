@@ -174,10 +174,11 @@ closed=2026-05-26 00:00:00~2026-05-26 23:59:59
 
 实现口径：
 
-- 第一版缺陷归属字段固定用 `current_owner`，含义是缺陷当前处理人，也就是“现在这条缺陷在谁手上”。
-- `current_owner == tapd_user` 用于人员维度聚合，适合日报里展示每个人当前缺陷压力、待处理缺陷和负责推进的缺陷。
+- 第一版缺陷处理人字段用 `current_owner`，含义是缺陷当前处理人，也就是“现在这条缺陷在谁手上”。
+- 第一版缺陷创建人字段用 `reporter`，对应 TAPD 页面中的“创建人”。
+- `current_owner == tapd_user` 用于人员维度聚合未解决和当日关闭，适合日报里展示每个人当前缺陷压力、待处理缺陷和负责推进的缺陷。
 - 未解决缺陷：`current_owner == tapd_user` 且 `status not in bug_closed_statuses`。
-- 今日新增缺陷：`current_owner == tapd_user` 且 `created` 落在当天；即使当天已经解决或关闭，也仍计入今日新增。
+- 今日新增缺陷：`reporter == tapd_user` 且 `created` 落在当天；即使当天已经解决或关闭，也仍计入今日新增。
 - 当日关闭缺陷：`current_owner == tapd_user`、`status in bug_closed_statuses`，且 `closed`、`resolved` 或 `completed` 任一字段落在当天。这个指标表示“当前/最后归属在此人的当日关闭缺陷”，不等同于“由此人关闭的缺陷”。
 - 单个缺陷如果 `current_owner` 支持多人或返回多人字符串，需要按 TAPD 实际返回格式拆分后归属到多个人；否则只归属给单人。
 - `current_owner` 为空或不在配置成员表里时，不丢弃数据，归入“未分配/未配置人员”汇总，并在日报异常提示里列出数量。
@@ -196,9 +197,10 @@ closed=2026-05-26 00:00:00~2026-05-26 23:59:59
 | `participator` | 谁参与过这些缺陷 | 适合追踪协作范围 | 容易多人重复计数 |
 | 开发/测试/自定义字段 | 组织内部定义的责任人 | 可贴合团队真实责任口径 | 需要先用字段发现接口确认字段名和候选值 |
 
-当前日报图建议把 `current_owner` 作为唯一归属字段，避免一个缺陷在多人之间重复计算。若后续需要更细，可以拆成两个维度：
+当前日报图拆成两个维度，避免把“谁创建”和“谁处理”混在一起：
 
-- 处理压力：按 `current_owner` 统计未解决、今日新增。
+- 处理压力：按 `current_owner` 统计未解决、当日关闭。
+- 新增产出：按 `reporter` 和 `created` 当天统计今日新增。
 - 质量归因：按开发人员、自定义责任人或需求归属统计缺陷分布。
 
 ## 六、TAPD 需求接口
@@ -258,7 +260,7 @@ GET /stories/get_fields_info?workspace_id={workspace_id}
 | 对象 | 要确认的字段 |
 | --- | --- |
 | 任务 | `status` 候选值、`iteration_id` 候选值、自定义字段 |
-| 缺陷 | `status` 候选值、`iteration_id` 候选值、`current_owner` 是否符合口径、自定义字段 |
+| 缺陷 | `status` 候选值、`iteration_id` 候选值、`current_owner` 是否符合处理人口径、`reporter` 是否符合创建人口径、自定义字段 |
 | 需求 | `status` 候选值、`iteration_id` 候选值、产品经理字段是否为 `owner` 或 `custom_field_*` |
 
 建议在 `projects.yaml` 增加可覆盖配置：
@@ -271,6 +273,7 @@ tapd:
   bug_closed_statuses: ["已解决", "已关闭", "无需解决"]
   fields:
     bug_owner: current_owner
+    bug_creator: reporter
     story_pm: owner
 ```
 

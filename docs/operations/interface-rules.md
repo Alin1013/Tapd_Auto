@@ -42,7 +42,7 @@ GET /stories/get_fields_info?workspace_id={workspace_id}
 | 对象 | 必须确认 |
 | --- | --- |
 | 任务 | `status` 候选值、`iteration_id`、负责人字段 |
-| 缺陷 | `status` 候选值、`current_owner` 是否符合归属口径、自定义责任字段 |
+| 缺陷 | `status` 候选值、`current_owner` 是否符合处理人口径、`reporter` 是否符合创建人口径、自定义责任字段 |
 | 需求 | `status` 候选值、`owner` 是否为产品经理字段、自定义 PM 字段 |
 
 如果某个工作区字段不同，只改配置，不改聚合代码。
@@ -56,19 +56,21 @@ tapd:
   fields:
     task_owner: owner
     bug_owner: current_owner
+    bug_creator: reporter
     story_pm: owner
 ```
 
 第一版默认规则：
 
 - 任务归属字段：`owner`。
-- 缺陷归属字段：`current_owner`。
+- 缺陷处理人字段：`current_owner`。
+- 缺陷创建人字段：`reporter`。
 - 产品经理需求字段：`owner`。
 
 缺陷统计口径：
 
 - 未解决缺陷：`current_owner == tapd_user` 且状态不在 `bug_closed_statuses`。
-- 今日新增缺陷：`current_owner == tapd_user` 且 `created` 落在当天；不因为当天内已解决或已关闭而排除。
+- 今日新增缺陷：`reporter == tapd_user` 且 `created` 落在当天；不因为当天内已解决或已关闭而排除。
 - 当日关闭缺陷：`current_owner == tapd_user`、状态在 `bug_closed_statuses`，且 `closed`、`resolved` 或 `completed` 任一关闭时间落在当天。
 - `Tora`（黄寅子）和 `nianqiongyue`（粘琼月）不进入缺陷成员表。
 - `current_owner` 为空或不在配置成员中时，后续应归入“未分配/未配置人员”异常提示。
