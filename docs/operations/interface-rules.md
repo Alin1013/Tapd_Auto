@@ -147,9 +147,9 @@ send_url = webhook + "&timestamp=" + timestamp + "&sign=" + sign
 约束：
 
 - `DINGTALK_WEBHOOK` 和 `DINGTALK_SECRET` 只放 `.env`。
-- Markdown 中的图片 URL 和 HTML 报表 URL 必须能被钉钉客户端访问。
-- Markdown 默认嵌入 `summary-1.png`，链接到 `index.html` 交互报表。
-- 自定义机器人限流要按每分钟 20 条消息控制，图片分页时应合并发送。
+- 钉钉 Markdown 开头嵌入页面截图 `page-screenshot.png`，后续复盘解析保持 Markdown 文字。
+- 页面截图 URL 和 HTML 报表 URL 必须能被钉钉客户端访问，便于群内成员查看首图和详情。
+- 自定义机器人限流要按每分钟 20 条消息控制，日报应合并为单条消息发送。
 - 发送层必须保留统一入口，后续可以替换为应用机器人。
 
 ## 7. 长期通知适配规则

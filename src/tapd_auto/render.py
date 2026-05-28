@@ -38,7 +38,7 @@ def render_markdown(report: dict[str, Any], report_url: str, image_urls: list[st
 
 
 def render_dingtalk_markdown(report: dict[str, Any], report_url: str, image_urls: list[str] | None = None) -> str:
-    """生成钉钉推送用 Markdown：截图优先，然后按成员输出复盘解析。"""
+    """生成钉钉推送用 Markdown：截图在前，复盘解析保持文字。"""
 
     summary = report["summary"]
     lines = [
@@ -135,7 +135,7 @@ def write_page_screenshot(
     window_size: str = "1280,1800",
     timeout_seconds: int = 15,
 ) -> Path:
-    """用无头浏览器生成 HTML 页面截图。"""
+    """用无头浏览器生成 HTML 页面截图，供钉钉消息首图使用。"""
 
     browser = browser_path or find_browser_path()
     if not browser:

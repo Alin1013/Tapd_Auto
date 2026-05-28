@@ -54,7 +54,7 @@ public/reports/YYYY-MM-DD/report.json
 public/reports/YYYY-MM-DD/field-info.json
 ```
 
-确认 `summary-1.png` 和 `index.html` 可以通过 `report.public_base_url` 被钉钉客户端访问。传入 `--send-dingtalk` 时会额外生成 `page-screenshot.png` 并作为钉钉推送首图。
+确认 `index.html` 可以通过 `report.public_base_url` 被钉钉客户端访问。传入 `--send-dingtalk` 时会额外生成 `page-screenshot.png`，钉钉消息开头嵌入页面截图，后续复盘解析保持 Markdown 文字。
 
 本地预览：
 

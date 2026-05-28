@@ -72,7 +72,7 @@
 - [x] 新增钉钉发送测试，覆盖加签 URL、Markdown payload 和通知配置。
 - [x] 实现 `--live`，从 TAPD OpenAPI 拉取真实数据。
 - [x] 实现 `--send-dingtalk`，仅在显式传入时发送钉钉消息。
-- [x] 实现 `summary-1.png` 日报图输出，并在 Markdown 中嵌入图片 URL。
+- [x] 实现 `summary-1.png` 日报图输出，并在本地 Markdown 摘要中嵌入图片 URL。
 - [x] live 模式写入 `field-info.json`，用于核对工作区字段和状态枚举。
 
 ## 任务 8：整理为生产级工具结构

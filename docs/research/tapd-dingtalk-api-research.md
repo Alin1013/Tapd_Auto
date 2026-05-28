@@ -28,7 +28,7 @@
 2. 钉钉群机器人 Webhook：
    - `POST https://oapi.dingtalk.com/robot/send?access_token=...`
    - 消息类型用 `markdown`
-   - 图片用外部可访问 PNG URL 嵌入 Markdown
+   - 钉钉消息开头嵌入页面截图 URL，后续复盘解析保持 Markdown 文字
    - 如果开启加签，需要追加 `timestamp` 和 `sign`
 
 不建议第一版做 TAPD 页面自动化。钉钉侧因为自定义机器人尚未创建，建议优先评估应用机器人作为长期方案；如果只追求最快上线，可以先用群自定义机器人发送 Markdown，发送层保留适配器接口，后续切到应用机器人。
@@ -276,7 +276,7 @@ tapd:
 
 ## 八、钉钉群机器人 Webhook
 
-用途：发送日报摘要、PNG 图片 URL、HTML 报表链接。
+用途：发送页面截图、日报摘要、成员复盘解析和 HTML 报表链接。
 
 ```http
 POST https://oapi.dingtalk.com/robot/send?access_token={ACCESS_TOKEN}
@@ -290,7 +290,7 @@ Markdown payload：
   "msgtype": "markdown",
   "markdown": {
     "title": "TAPD 每日复盘 2026-05-26",
-    "text": "### TAPD 每日复盘 2026-05-26\n\n今日统计：3 个项目 / 5 个迭代 / 18 人\n\n![日报图](https://tapd-daily.internal.example.com/reports/2026-05-26/summary-1.png)\n\n[查看交互报表](https://tapd-daily.internal.example.com/reports/2026-05-26/index.html)"
+    "text": "### TAPD 每日复盘 2026-05-26\n\n![当日复盘截图](https://tapd-daily.internal.example.com/reports/2026-05-26/page-screenshot.png)\n\n今日统计：3 个项目 / 5 个迭代 / 18 人\n今日缺陷：未解决 24，今日新增 6，当日关闭 9\n\n[查看交互报表](https://tapd-daily.internal.example.com/reports/2026-05-26/index.html)\n\n#### 成员复盘\n\n雷艾琳：Deepexi Foil / Deepexi Foil V1.0.0，未解决 3，今日新增 1，当日关闭 2。"
   },
   "at": {
     "atMobiles": [],
@@ -324,11 +324,11 @@ function signDingTalk(timestamp, secret) {
 注意点：
 
 - `DINGTALK_WEBHOOK` 和 `DINGTALK_SECRET` 都只能放 `.env`。
-- 发送 PNG 图片时，Markdown 里的图片 URL 必须能被钉钉客户端访问；当前已确认 `public_base_url` 在钉钉客户端和手机端都可访问。
+- 钉钉 Markdown 开头嵌入页面截图；需确保截图 URL 和 HTML 报表链接都能被钉钉客户端访问。
 - 自定义群机器人只适合“往群里发消息”，不支持单聊，也不支持接收消息。
 - 钉钉开发者百科提示群自定义机器人“即将下线，已创建的机器人不受影响”。如果这是新建长期系统，建议预留切换到“应用机器人”的发送适配层。
 - 自定义机器人 API 能力受限，不能直接调用钉钉 OpenAPI 上传图片；如果要上传图片并用 `MediaID`，需要用应用机器人。
-- 常见限流口径：每个机器人每分钟最多 20 条消息。日报图片分页时要合并发送，避免循环刷屏。
+- 常见限流口径：每个机器人每分钟最多 20 条消息。日报应合并为单条 Markdown 消息，避免循环刷屏。
 
 ## 九、钉钉应用机器人长期方案
 

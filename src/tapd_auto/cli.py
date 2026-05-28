@@ -69,5 +69,5 @@ def run_cli(argv: list[str] | None = None) -> int:
         print("已发送钉钉 Markdown 日报。")
 
     print(f"已生成 TAPD 每日复盘：{output_dir / 'index.html'}")
-    print(f"钉钉 Markdown 摘要：{output_dir / 'summary.md'}")
+    print(f"本地 Markdown 摘要：{output_dir / 'summary.md'}")
     return 0

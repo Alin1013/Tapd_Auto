@@ -1,6 +1,6 @@
 # TAPD 自动日报
 
-这个项目用于生成 TAPD 每日复盘报表。第一版已经打通本地链路和真实接口边界：读取配置、拉取 TAPD 数据、聚合任务/缺陷/需求、生成 PNG 日报图、HTML 交互报表、页面截图、Markdown 摘要和 JSON 数据文件。钉钉发送需要显式打开，避免调试时误发群消息。
+这个项目用于生成 TAPD 每日复盘报表。第一版已经打通本地链路和真实接口边界：读取配置、拉取 TAPD 数据、聚合任务/缺陷/需求、生成 PNG 日报图、HTML 交互报表、页面截图、本地 Markdown 摘要和 JSON 数据文件。钉钉发送需要显式打开，避免调试时误发群消息。
 
 ## 目录结构
 
@@ -29,6 +29,7 @@ cp .env.example .env
 TAPD_ACCESS_TOKEN=你的 TAPD 个人访问令牌
 DINGTALK_WEBHOOK=
 DINGTALK_SECRET=
+TAPD_AUTO_BROWSER_PATH=
 ```
 
 注意：不要把 `.env` 提交到 Git。当前 `.gitignore` 已经忽略 `.env`、真实配置 `configs/config.yaml`、日志和生成报表。
@@ -189,4 +190,4 @@ cron 示例见 `scripts/crontab.example`。
 5. 按人员聚合今日缺陷，日报展示未解决、今日新增、当日关闭；任务数据保留采集但页面和通知不展示任务数、完成率或进展。
 6. 仅保留今天有新增/关闭缺陷或当天产品需求动作的项目迭代，再按迭代卡片展示今日缺陷和当前迭代全部未发布“产品总需求”。
 7. 输出 PNG、HTML、Markdown 和 JSON。
-8. 只有传入 `--send-dingtalk` 时才生成页面截图并发送钉钉 Markdown；推送开头使用 `page-screenshot.png`，中段按成员输出复盘解析并用姓名作为段落前缀。
+8. 只有传入 `--send-dingtalk` 时才生成页面截图并发送钉钉 Markdown；推送开头使用 `page-screenshot.png`，中段按成员输出文字复盘解析并用姓名作为段落前缀。

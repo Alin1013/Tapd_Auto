@@ -1,8 +1,9 @@
+import os
+import subprocess
 import tempfile
 import textwrap
 import unittest
 import sys
-import subprocess
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -590,7 +591,7 @@ class TapdDailyTests(unittest.TestCase):
         self.assertNotIn("任务整体完成率", markdown)
         self.assertIn("今日缺陷：未解决 1，今日新增 2，当日关闭 1", markdown)
 
-    def test_render_dingtalk_markdown_starts_with_page_screenshot_and_member_names(self):
+    def test_render_dingtalk_markdown_starts_with_page_screenshot_and_member_text(self):
         report = {
             "date": "2026-05-26",
             "timezone": "Asia/Shanghai",
@@ -655,6 +656,8 @@ class TapdDailyTests(unittest.TestCase):
         )
 
         self.assertLess(markdown.index("![当日复盘截图]"), markdown.index("今日统计"))
+        self.assertIn("page-screenshot.png", markdown)
+        self.assertLess(markdown.index("今日统计"), markdown.index("#### 成员复盘"))
         self.assertIn("雷艾琳：", markdown)
         self.assertIn("陈银：", markdown)
         self.assertNotIn("@", markdown)
@@ -1285,6 +1288,48 @@ class TapdDailyTests(unittest.TestCase):
             self.assertEqual(screenshot_path.name, "page-screenshot.png")
             self.assertTrue(screenshot_path.exists())
 
+    def test_run_cli_generates_page_screenshot_before_dingtalk_send(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_root = Path(temp_dir) / "reports"
+            config_text = CONFIG_TEXT.replace(
+                "output_dir: ./public/reports",
+                f'output_dir: "{output_root}"',
+            )
+            config_path = Path(temp_dir) / "config.yaml"
+            config_path.write_text(textwrap.dedent(config_text), encoding="utf-8")
+            screenshot_path = output_root / "2026-05-26" / "page-screenshot.png"
+
+            def fake_write_page_screenshot(html_path, output_dir):
+                self.assertEqual(Path(html_path).name, "index.html")
+                self.assertEqual(Path(output_dir).name, "2026-05-26")
+                screenshot_path.write_bytes(b"\x89PNG\r\n")
+                return screenshot_path
+
+            with patch.dict(
+                os.environ,
+                {
+                    "DINGTALK_WEBHOOK": "https://oapi.dingtalk.com/robot/send?access_token=abc",
+                    "DINGTALK_SECRET": "SECsecret",
+                },
+            ), patch("tapd_auto.cli.write_page_screenshot", side_effect=fake_write_page_screenshot), patch(
+                "tapd_auto.cli.send_dingtalk_report"
+            ) as send_report:
+                exit_code = td.run_cli(
+                    [
+                        "--config",
+                        str(config_path),
+                        "--date",
+                        "2026-05-26",
+                        "--dry-run",
+                        "--send-dingtalk",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 0)
+        markdown = send_report.call_args.args[3]
+        self.assertIn("![当日复盘截图](https://tapd-daily.internal.example.com/reports/2026-05-26/page-screenshot.png)", markdown)
+        self.assertIn("#### 成员复盘", markdown)
+
     def test_tapd_client_validates_api_status_and_reads_paginated_lists(self):
         first_page_items = [{"id": item_id} for item_id in range(200)]
         first_response = Mock()
@@ -1492,6 +1537,9 @@ class TapdDailyTests(unittest.TestCase):
         self.assertEqual(payload["msgtype"], "markdown")
         self.assertEqual(payload["markdown"]["title"], "TAPD 每日复盘 2026-05-26")
         self.assertEqual(payload["at"]["atMobiles"], ["13800138000"])
+        self.assertIn("![当日复盘截图]", payload["markdown"]["text"])
+        self.assertIn("page-screenshot.png", payload["markdown"]["text"])
+        self.assertLess(payload["markdown"]["text"].index("![当日复盘截图]"), payload["markdown"]["text"].index("#### 成员复盘"))
         self.assertIn("雷艾琳：", payload["markdown"]["text"])
         self.assertNotIn("@13900139000", payload["markdown"]["text"])
 
